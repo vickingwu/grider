@@ -72,9 +72,12 @@ class BacktestService:
                     exchange_code, start_date=start_date, end_date=end_date
                 )
             else:
-                # 未指定（或留空）日期：使用默认的交易日历（最近30个交易日）
+                # 未指定（或留空）日期：默认使用最近半年（约182个自然日）
+                today = datetime.now()
+                default_end = today.strftime('%Y-%m-%d')
+                default_start = (today - timedelta(days=182)).strftime('%Y-%m-%d')
                 trading_days = self.data_service.get_trading_calendar(
-                    exchange_code, limit=30
+                    exchange_code, start_date=default_start, end_date=default_end
                 )
                 if trading_days:
                     start_date = trading_days[-1]

@@ -31,6 +31,13 @@ const AnalysisReport = ({
     }
   }, [editParamsFirst, autoTabApplied]);
 
+  // 回测标签一旦被访问就保持挂载（用 CSS 隐藏而非卸载），
+  // 这样切换标签后用户编辑的参数与回测结果不会丢失。
+  const [backtestMounted, setBacktestMounted] = useState(editParamsFirst);
+  useEffect(() => {
+    if (activeTab === "backtest") setBacktestMounted(true);
+  }, [activeTab]);
+
 
   // 显示加载状态
   if (loading) {
@@ -148,18 +155,20 @@ const AnalysisReport = ({
             />
           )}
 
-          {/* 回测分析标签页 */}
-          {activeTab === "backtest" && (
-            <Suspense fallback={<div className="text-center py-12">加载中...</div>}>
-              <BacktestTab
-                etfCode={etf_info.code}
-                exchangeCode={etf_info.exchange_code}
-                gridStrategy={grid_strategy}
-                type={etf_info.type}
-                totalCapital={input_parameters.total_capital}
-                autoEditParams={editParamsFirst}
-              />
-            </Suspense>
+          {/* 回测分析标签页：一旦挂载就保留（用 display 隐藏），避免切换标签丢失编辑参数 */}
+          {backtestMounted && (
+            <div style={{ display: activeTab === "backtest" ? "block" : "none" }}>
+              <Suspense fallback={<div className="text-center py-12">加载中...</div>}>
+                <BacktestTab
+                  etfCode={etf_info.code}
+                  exchangeCode={etf_info.exchange_code}
+                  gridStrategy={grid_strategy}
+                  type={etf_info.type}
+                  totalCapital={input_parameters.total_capital}
+                  autoEditParams={editParamsFirst}
+                />
+              </Suspense>
+            </div>
           )}
         </div>
       </div>
