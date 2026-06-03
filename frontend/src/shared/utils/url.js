@@ -71,6 +71,11 @@ export const encodeAnalysisParams = (params) => {
     searchParams.set("adjustment", params.adjustmentCoefficient.toString());
   }
 
+  // 分析前自定义网格参数标记
+  if (params.editParamsFirst) {
+    searchParams.set("edit", "1");
+  }
+
   return searchParams;
 };
 
@@ -110,6 +115,11 @@ export const decodeAnalysisParams = (searchParams) => {
     if (!isNaN(adjustmentNum) && adjustmentNum >= 0.0 && adjustmentNum <= 2.0) {
       params.adjustmentCoefficient = adjustmentNum;
     }
+  }
+
+  // 解析"分析前自定义网格参数"标记
+  if (searchParams.get("edit") === "1") {
+    params.editParamsFirst = true;
   }
 
   return params;

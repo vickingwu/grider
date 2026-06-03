@@ -45,9 +45,14 @@ class BacktestService:
             config = self._prepare_config(backtest_config)
 
             # 2. 确定回测日期范围
-            if custom_grid_params and 'startDate' in custom_grid_params and 'endDate' in custom_grid_params:
-                start_date = custom_grid_params['startDate']
-                end_date = custom_grid_params['endDate']
+            custom_start = (custom_grid_params or {}).get('startDate') or ''
+            custom_end = (custom_grid_params or {}).get('endDate') or ''
+            custom_start = custom_start.strip() if isinstance(custom_start, str) else ''
+            custom_end = custom_end.strip() if isinstance(custom_end, str) else ''
+
+            if custom_start and custom_end:
+                start_date = custom_start
+                end_date = custom_end
                 # 验证日期格式
                 try:
                     start_dt = datetime.strptime(start_date, '%Y-%m-%d')
@@ -59,15 +64,15 @@ class BacktestService:
                 days_diff = (end_dt - start_dt).days
                 if days_diff < 30:
                     raise ValueError("回测时间跨度至少30天")
-                if days_diff > 120:
-                    raise ValueError("回测时间跨度不能超过120天")
+                if days_diff > 3660:
+                    raise ValueError("回测时间跨度不能超过10年")
 
                 # 获取指定日期范围内的交易日历
                 trading_days = self.data_service.get_trading_calendar(
                     exchange_code, start_date=start_date, end_date=end_date
                 )
             else:
-                # 获取默认的交易日历（最近30个交易日）
+                # 未指定（或留空）日期：使用默认的交易日历（最近30个交易日）
                 trading_days = self.data_service.get_trading_calendar(
                     exchange_code, limit=30
                 )
@@ -97,6 +102,17 @@ class BacktestService:
                 logger.info("已应用自定义网格参数进行回测")
             else:
                 logger.info("未提供自定义网格参数，使用默认策略")
+
+            # 网格区间对齐：当回测起始价落在网格区间之外时，以起始价为中心重建网格，
+            # 避免 0 底仓 / 0 成交（长周期、自定义日期、历史区间等场景常见）。
+            # 注意：仅在"价格完全不重叠"时才重建，用户设定的网格在区间内时予以尊重。
+            total_capital = (
+                grid_strategy['fund_allocation']['base_position_amount'] +
+                grid_strategy['fund_allocation']['grid_trading_amount']
+            )
+            grid_strategy = self._realign_grid_to_period(
+                grid_strategy, kline_data, total_capital, country
+            )
 
             # 6. 执行回测（传递country参数）
             engine = BacktestEngine(grid_strategy, config, country=country)
@@ -149,6 +165,76 @@ class BacktestService:
             risk_free_rate=backtest_config.get('riskFreeRate', 0.03),
             trading_days_per_year=backtest_config.get('tradingDaysPerYear', 244)
         )
+
+    def _realign_grid_to_period(self, grid_strategy: dict, kline_data: list,
+                                total_capital: float, country: str = 'CHN') -> dict:
+        """回测网格区间对齐。
+
+        分析阶段网格以"最新价"为中心构建，但回测回放的是历史区间，
+        其起始价格可能落在网格区间之外，导致初始建仓为 0、全程无成交。
+        此处检测：若回测首根K线均价不在 [lower, upper] 内，则以该价格为
+        新基准价，按原步长重建等距/等比网格，使回测真实可交易。
+        """
+        try:
+            if not kline_data:
+                return grid_strategy
+
+            first = kline_data[0]
+            start_price = (first.high + first.low + first.open + first.close) / 4
+
+            price_range = grid_strategy.get('price_range', {})
+            lower = price_range.get('lower')
+            upper = price_range.get('upper')
+            if lower is None or upper is None:
+                return grid_strategy
+
+            # 起始价格在区间内则无需调整
+            if lower <= start_price <= upper:
+                return grid_strategy
+
+            logger.warning(
+                f"回测起始价{start_price:.3f}超出分析网格[{lower:.3f}, {upper:.3f}]，"
+                f"以起始价为中心重建网格"
+            )
+
+            optimizer = GridOptimizer(country=country)
+            grid_config = grid_strategy.get('grid_config', {})
+            grid_type = grid_config.get('type', '等差')
+
+            # 保持原网格宽度比例，围绕新基准价重建上下边界
+            half_width_ratio = (upper - lower) / 2 / grid_strategy.get('current_price', start_price)
+            new_lower = round(start_price * (1 - half_width_ratio), 3)
+            new_upper = round(start_price * (1 + half_width_ratio), 3)
+
+            if grid_type == '等差':
+                step = grid_config.get('step_size', round(start_price * 0.01, 4))
+                price_levels = optimizer.arithmetic_calculator.calculate_grid_levels(
+                    new_lower, new_upper, step, start_price
+                )
+            else:
+                step_ratio = grid_config.get('step_ratio', 0.01)
+                price_levels = optimizer.geometric_calculator.calculate_grid_levels(
+                    new_lower, new_upper, start_price * step_ratio, start_price
+                )
+
+            fund_allocation = optimizer.calculate_fund_allocation_v2(
+                total_capital, price_levels, start_price
+            )
+
+            grid_strategy['current_price'] = round(start_price, 3)
+            grid_strategy['price_range'] = {'lower': new_lower, 'upper': new_upper}
+            grid_strategy['price_levels'] = price_levels
+            grid_strategy['grid_config']['count'] = len(price_levels)
+            grid_strategy['grid_config']['single_trade_quantity'] = fund_allocation.get(
+                'single_trade_quantity', grid_strategy['grid_config'].get('single_trade_quantity', 100)
+            )
+            grid_strategy['fund_allocation'] = fund_allocation
+            grid_strategy['realigned_to_period'] = True
+
+            return grid_strategy
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"回测网格区间对齐失败，使用原网格: {e}")
+            return grid_strategy
 
     def _apply_custom_grid_params(self, grid_strategy: dict, custom_grid_params: dict, country: str = 'CHN') -> dict:
         """应用自定义网格参数到网格策略"""

@@ -13,7 +13,8 @@ export default function GridParameterSettings({
   onConfigChange,
   onParametersChange,
   onRunBacktest,
-  isVisible = true
+  isVisible = true,
+  autoEditParams = false
 }) {
   const [isEditingGrid, setIsEditingGrid] = useState(false);
   const [isEditingCommission, setIsEditingCommission] = useState(false);
@@ -21,6 +22,16 @@ export default function GridParameterSettings({
   const [editedCommissionConfig, setEditedCommissionConfig] = useState(backtestConfig);
   const [validationErrors, setValidationErrors] = useState({});
   const [isValid, setIsValid] = useState(true);
+  // 仅在分析前勾选"自定义参数"时自动展开一次编辑面板
+  const [autoEditApplied, setAutoEditApplied] = useState(false);
+
+  // 当从首页勾选"分析前自定义网格参数"进入时，自动展开编辑面板（仅一次）
+  useEffect(() => {
+    if (autoEditParams && !autoEditApplied && gridStrategy && inputParameters) {
+      setIsEditingGrid(true);
+      setAutoEditApplied(true);
+    }
+  }, [autoEditParams, autoEditApplied, gridStrategy, inputParameters]);
 
   // 初始化网格参数
   useEffect(() => {
@@ -121,8 +132,8 @@ export default function GridParameterSettings({
       if (daysDiff < 30) {
         errors.dates = '时间跨度至少30天';
       }
-      if (daysDiff > 120) {
-        errors.dates = '时间跨度不超过120天';
+      if (daysDiff > 3660) {
+        errors.dates = '时间跨度不超过10年';
       }
     }
 

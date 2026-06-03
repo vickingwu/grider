@@ -13,7 +13,7 @@ import BacktestError from './backtest/BacktestError';
 /**
  * 回测分析标签页
  */
-export default function BacktestTab({ etfCode, exchangeCode, gridStrategy, type, totalCapital }) {
+export default function BacktestTab({ etfCode, exchangeCode, gridStrategy, type, totalCapital, autoEditParams = false }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [backtestResult, setBacktestResult] = useState(null);
@@ -117,9 +117,8 @@ export default function BacktestTab({ etfCode, exchangeCode, gridStrategy, type,
         onParametersChange={handleCustomGridParamsChange}
         onRunBacktest={handleRunBacktest}
         isVisible={true}
+        autoEditParams={autoEditParams}
       />
-      {console.log('BacktestTab backtestResult:', backtestResult)}
-      {console.log('BacktestTab backtest_period:', backtestResult?.backtest_period)}
 
       {loading && <BacktestLoading />}
 
@@ -172,7 +171,7 @@ export default function BacktestTab({ etfCode, exchangeCode, gridStrategy, type,
       )}
 
       {/* 功能引导 */}
-      <BacktestGuide />
+      <BacktestGuide period={backtestResult?.backtest_period} />
     </div>
   );
 }

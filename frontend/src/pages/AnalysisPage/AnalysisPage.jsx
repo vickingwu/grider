@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { Share2, ArrowLeft, AlertTriangle } from "lucide-react";
+import { ArrowLeft, AlertTriangle } from "lucide-react";
 import AnalysisReport from "@features/analysis/components/AnalysisReport";
 import DisclaimerModal from "@features/analysis/components/DisclaimerModal";
 import { analyzeETF } from "@shared/services/api";
@@ -12,7 +12,6 @@ import {
   encodeAnalysisParams,
 } from "@shared/utils/url";
 import { checkDisclaimerStatus, acceptDisclaimer } from "@shared/utils/disclaimer";
-import { useShare } from "@shared/hooks/useShare";
 
 /**
  * 分析页面组件
@@ -22,7 +21,6 @@ const AnalysisPage = () => {
   const { etfCode } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { shareContent } = useShare();
 
   // 状态管理
   const [analysisData, setAnalysisData] = useState(null);
@@ -157,17 +155,6 @@ const AnalysisPage = () => {
     }
   };
 
-  // 分享功能
-  const handleShare = async () => {
-    const shareData = {
-      title: `${analysisData?.etf_info?.name || etfCode} - ETF网格交易策略分析`,
-      text: `查看 ${analysisData?.etf_info?.name || etfCode} 的智能网格交易策略分析结果`,
-      url: window.location.href,
-    };
-
-    await shareContent(shareData);
-  };
-
   // 返回首页
   const handleBackToHome = () => {
     navigate("/");
@@ -265,16 +252,6 @@ const AnalysisPage = () => {
                 <ArrowLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">返回首页</span>
               </button>
-
-              {/* 分享按钮 */}
-              <button
-                onClick={handleShare}
-                className="btn btn-primary btn-sm flex items-center gap-2"
-                title="分享报告"
-              >
-                <Share2 className="w-4 h-4" />
-                <span className="hidden sm:inline">分享报告</span>
-              </button>
             </div>
 
             {/* 小屏幕：第二行 - 标题和参数信息 */}
@@ -321,18 +298,6 @@ const AnalysisPage = () => {
                   </p>
                 </div>
               </div>
-
-              {/* 右侧：分享按钮 */}
-              <div className="hidden sm:flex items-center">
-                <button
-                  onClick={handleShare}
-                  className="btn btn-primary btn-sm flex items-center gap-2"
-                  title="分享报告"
-                >
-                  <Share2 className="w-4 h-4" />
-                  分享报告
-                </button>
-              </div>
             </div>
           </div>
 
@@ -363,7 +328,7 @@ const AnalysisPage = () => {
             loading={loading}
             onBackToInput={handleBackToHome}
             onReAnalysis={handleReAnalysis}
-            showShareButton={true}
+            editParamsFirst={currentParams?.editParamsFirst}
           />
         )}
 

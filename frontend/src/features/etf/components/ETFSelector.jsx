@@ -68,14 +68,14 @@ export default function ETFSelector({
           onChange={(e) =>
             onChange(e.target.value.replace(/[^0-9a-zA-Z]/g, "").toUpperCase())
           }
-          placeholder="请输入标的代码，如：510300"
+          placeholder="请输入标的代码，如：510300、603137、SPY"
           className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
             error ? "border-red-300" : "border-gray-300"
           }`}
           maxLength={6}
         />
 
-        {/* ETF信息区域 */}
+        {/* 标的信息区域 */}
         <div className="mt-2" style={{ minHeight: "80px" }}>
           {loading && <ETFInfoSkeleton />}
 

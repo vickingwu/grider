@@ -1,6 +1,5 @@
-import React, { useState, lazy, Suspense } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { LoadingSpinner } from "@shared/components/ui";
-import { useShare } from "@shared/hooks";
 import ReportTabs from "./ReportTabs";
 import OverviewTab from "./OverviewTab";
 import ErrorState from "./ErrorState";
@@ -20,9 +19,17 @@ const AnalysisReport = ({
   loading,
   onBackToInput,
   onReAnalysis,
+  editParamsFirst = false,
 }) => {
-  const [activeTab, setActiveTab] = useState("overview");
-  const { shareContent } = useShare();
+  const [activeTab, setActiveTab] = useState(editParamsFirst ? "backtest" : "overview");
+  // 从首页勾选"分析前自定义参数"进入时，自动切到回测标签（仅一次，之后尊重用户手动切换）
+  const [autoTabApplied, setAutoTabApplied] = useState(false);
+  useEffect(() => {
+    if (editParamsFirst && !autoTabApplied) {
+      setActiveTab("backtest");
+      setAutoTabApplied(true);
+    }
+  }, [editParamsFirst, autoTabApplied]);
 
 
   // 显示加载状态
@@ -150,6 +157,7 @@ const AnalysisReport = ({
                 gridStrategy={grid_strategy}
                 type={etf_info.type}
                 totalCapital={input_parameters.total_capital}
+                autoEditParams={editParamsFirst}
               />
             </Suspense>
           )}
