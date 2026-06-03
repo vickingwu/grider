@@ -13,7 +13,7 @@ import BacktestError from './backtest/BacktestError';
 /**
  * 回测分析标签页
  */
-export default function BacktestTab({ etfCode, exchangeCode, gridStrategy, type, totalCapital, autoEditParams = false }) {
+export default function BacktestTab({ etfCode, exchangeCode, gridStrategy, type, totalCapital, autoEditParams = false, onGridApplied }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [backtestResult, setBacktestResult] = useState(null);
@@ -42,6 +42,14 @@ export default function BacktestTab({ etfCode, exchangeCode, gridStrategy, type,
   useEffect(() => {
     localStorage.setItem('backtestConfig', JSON.stringify(backtestConfig));
   }, [backtestConfig]);
+
+  // 联动：把回测实际使用的网格（后端返回，含自定义/重对齐后的参数）上报给父组件，
+  // 使"网格策略"标签与"回测分析"保持一致。
+  useEffect(() => {
+    if (backtestResult?.grid_strategy && typeof onGridApplied === 'function') {
+      onGridApplied(backtestResult.grid_strategy);
+    }
+  }, [backtestResult, onGridApplied]);
 
   // 自定义网格参数变更处理
   const handleCustomGridParamsChange = useCallback((newParams) => {

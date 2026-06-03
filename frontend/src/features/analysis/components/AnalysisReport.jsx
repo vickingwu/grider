@@ -38,6 +38,10 @@ const AnalysisReport = ({
     if (activeTab === "backtest") setBacktestMounted(true);
   }, [activeTab]);
 
+  // 联动：回测分析里实际使用的网格（含用户自定义参数）。
+  // 用户在回测中改了参数后，"网格策略"标签也显示同一套网格。
+  const [effectiveGrid, setEffectiveGrid] = useState(null);
+
 
   // 显示加载状态
   if (loading) {
@@ -145,13 +149,14 @@ const AnalysisReport = ({
           {/* 网格策略标签页 */}
           {activeTab === "strategy" && (
             <GridParametersCard
-              gridStrategy={grid_strategy}
+              gridStrategy={effectiveGrid || grid_strategy}
               inputParameters={input_parameters}
               strategyRationale={strategy_rationale}
               adjustmentSuggestions={adjustment_suggestions}
               showDetailed={true}
               dataQuality={data_quality}
               etfInfo={etf_info}
+              isCustomized={!!effectiveGrid}
             />
           )}
 
@@ -166,6 +171,7 @@ const AnalysisReport = ({
                   type={etf_info.type}
                   totalCapital={input_parameters.total_capital}
                   autoEditParams={editParamsFirst}
+                  onGridApplied={setEffectiveGrid}
                 />
               </Suspense>
             </div>
