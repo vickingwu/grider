@@ -93,6 +93,14 @@ class ApiService {
   }
 
   /**
+   * 运行均线策略回测（趋势跟随）
+   * @param {object} params - { etfCode, totalCapital, maParams, backtestConfig, startDate, endDate }
+   */
+  async runMABacktest(params) {
+    return this.post("/grid/ma-backtest", params);
+  }
+
+  /**
    * 健康检查
    */
   async healthCheck() {
@@ -138,6 +146,7 @@ export const analyzeETF = (parameters) => apiService.analyzeETF(parameters);
 export const getETFInfo = (etfCode) => apiService.getETFInfo(etfCode);
 export const getPopularETFs = () => apiService.getPopularETFs();
 export const runScreener = (forceRefresh) => apiService.runScreener(forceRefresh);
+export const runMABacktest = (params) => apiService.runMABacktest(params);
 export const healthCheck = () => apiService.healthCheck();
 export const getVersion = () => apiService.getVersion();
 export const runBacktest = (etfCode, exchangeCode, gridStrategy, backtestConfig, type, customGridParams) =>

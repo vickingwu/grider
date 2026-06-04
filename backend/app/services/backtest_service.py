@@ -7,8 +7,10 @@
 from typing import Dict, Optional
 from datetime import datetime, timedelta
 from app.algorithms.backtest.engine import BacktestEngine
+from app.algorithms.backtest.ma_engine import MABacktestEngine
 from app.algorithms.backtest.metrics import MetricsCalculator
 from app.algorithms.backtest.models import BacktestConfig
+from app.algorithms.backtest.fee_calculator import FeeCalculator
 from app.algorithms.grid.optimizer import GridOptimizer
 from app.services.data_service import DataService
 from app.utils.logger import get_logger
@@ -157,6 +159,160 @@ class BacktestService:
             logger.error(f"回测执行失败: {str(e)}", exc_info=True)
             raise
 
+    def run_ma_backtest(self, etf_code: str, exchange_code: str, ma_params: dict,
+                        total_capital: float, backtest_config: Optional[dict] = None,
+                        type: str = 'STOCK', country: str = 'CHN',
+                        start_date_in: str = '', end_date_in: str = '') -> Dict:
+        """执行均线策略回测（趋势跟随：价格上穿均线买入、下穿清仓）。
+
+        Args:
+            ma_params: {period, ma_type('SMA'|'EMA'), position_ratio(0-1)}
+            total_capital: 总资金
+            start_date_in / end_date_in: 可选自定义日期（YYYY-MM-DD）
+        """
+        try:
+            config = self._prepare_config(backtest_config)
+
+            # 解析日期范围（与网格回测一致）
+            start_date, end_date, trading_days = self._resolve_date_range(
+                exchange_code, start_date_in, end_date_in
+            )
+
+            # 获取K线（跨度>120天自动用日线）
+            kline_data = self.data_service.get_5min_kline(
+                etf_code, exchange_code, start_date, end_date, type
+            )
+            if not kline_data:
+                raise ValueError(f"无法获取K线数据: {start_date} - {end_date}")
+            logger.info(f"均线回测获取到 {len(kline_data)} 条K线数据")
+
+            # 校验均线周期不超过数据量
+            period = int(ma_params.get('period', 20))
+            if period >= len(kline_data):
+                raise ValueError(f"均线周期({period})过长，超过回测数据条数({len(kline_data)})，请缩短周期或拉长回测区间")
+
+            # 执行均线回测
+            fee_calc = FeeCalculator(
+                commission_rate=config.commission_rate,
+                min_commission=config.min_commission,
+            )
+            engine = MABacktestEngine(ma_params, fee_calc, total_capital, country=country)
+            backtest_result = engine.run(kline_data)
+
+            # 计算指标（grid_count 传 0，网格相关指标对均线无意义）
+            metrics_calc = MetricsCalculator(
+                trading_days_per_year=config.trading_days_per_year,
+                risk_free_rate=config.risk_free_rate,
+            )
+            metrics, benchmark = metrics_calc.calculate_all(
+                initial_capital=total_capital,
+                final_capital=backtest_result['final_state']['total_asset'],
+                equity_curve=backtest_result['equity_curve'],
+                trade_records=backtest_result['trade_records'],
+                price_curve=[{'close': k.close} for k in kline_data],
+                grid_count=0,
+            )
+
+            return self._format_ma_result(
+                backtest_result=backtest_result,
+                metrics=metrics,
+                benchmark=benchmark,
+                start_date=start_date,
+                end_date=end_date,
+                trading_days=len(trading_days),
+                kline_data=kline_data,
+                ma_params=ma_params,
+            )
+        except Exception as e:
+            logger.error(f"均线回测执行失败: {str(e)}", exc_info=True)
+            raise
+
+    def _resolve_date_range(self, exchange_code: str, custom_start: str, custom_end: str):
+        """解析回测日期范围，返回 (start_date, end_date, trading_days)。"""
+        custom_start = custom_start.strip() if isinstance(custom_start, str) else ''
+        custom_end = custom_end.strip() if isinstance(custom_end, str) else ''
+
+        if custom_start and custom_end:
+            try:
+                start_dt = datetime.strptime(custom_start, '%Y-%m-%d')
+                end_dt = datetime.strptime(custom_end, '%Y-%m-%d')
+            except ValueError:
+                raise ValueError("自定义日期格式无效，应为YYYY-MM-DD")
+            days_diff = (end_dt - start_dt).days
+            if days_diff < 30:
+                raise ValueError("回测时间跨度至少30天")
+            if days_diff > 3660:
+                raise ValueError("回测时间跨度不能超过10年")
+            trading_days = self.data_service.get_trading_calendar(
+                exchange_code, start_date=custom_start, end_date=custom_end
+            )
+            return custom_start, custom_end, trading_days
+
+        # 默认最近半年
+        today = datetime.now()
+        default_end = today.strftime('%Y-%m-%d')
+        default_start = (today - timedelta(days=182)).strftime('%Y-%m-%d')
+        trading_days = self.data_service.get_trading_calendar(
+            exchange_code, start_date=default_start, end_date=default_end
+        )
+        if not trading_days:
+            raise ValueError("无法获取交易日历")
+        return trading_days[-1], trading_days[0], trading_days
+
+    def _format_ma_result(self, backtest_result: Dict, metrics, benchmark,
+                          start_date: str, end_date: str, trading_days: int,
+                          kline_data: list, ma_params: dict) -> Dict:
+        """格式化均线回测结果（结构对齐网格回测，便于前端复用）。"""
+        # 均线序列与时间对齐，供前端叠加绘制
+        ma_series = backtest_result.get('ma_series', [])
+        ma_curve = [
+            {
+                'time': k.time.strftime('%Y-%m-%d %H:%M:%S'),
+                'ma': round(ma, 3) if ma is not None else None,
+            }
+            for k, ma in zip(kline_data, ma_series)
+        ]
+        return {
+            'strategy_type': 'ma',
+            'ma_config': {
+                'period': int(ma_params.get('period', 20)),
+                'ma_type': ma_params.get('ma_type', 'SMA'),
+                'position_ratio': float(ma_params.get('position_ratio', 1.0)),
+            },
+            'backtest_period': {
+                'start_date': start_date,
+                'end_date': end_date,
+                'trading_days': trading_days,
+                'total_bars': len(kline_data),
+            },
+            'performance_metrics': {
+                'total_return': round(metrics.total_return, 4),
+                'annualized_return': round(metrics.annualized_return, 4),
+                'absolute_profit': round(metrics.absolute_profit, 2),
+                'max_drawdown': round(metrics.max_drawdown, 4),
+                'sharpe_ratio': round(metrics.sharpe_ratio, 2) if metrics.sharpe_ratio else None,
+                'volatility': round(metrics.volatility, 4),
+            },
+            'trading_metrics': {
+                'total_trades': metrics.total_trades,
+                'buy_trades': metrics.buy_trades,
+                'sell_trades': metrics.sell_trades,
+                'win_rate': round(metrics.win_rate, 4),
+                'profit_loss_ratio': round(metrics.profit_loss_ratio, 2) if metrics.profit_loss_ratio else None,
+                'capital_utilization_rate': round(metrics.capital_utilization_rate, 4),
+            },
+            'benchmark_comparison': {
+                'hold_return': round(benchmark.hold_return, 4),
+                'excess_return': round(benchmark.excess_return, 4),
+                'excess_return_rate': round(benchmark.excess_return_rate, 4),
+            },
+            'equity_curve': self._format_equity_curve(backtest_result['equity_curve']),
+            'price_curve': self._format_price_curve(kline_data),
+            'ma_curve': ma_curve,
+            'trade_records': self._format_trade_records(backtest_result['trade_records']),
+            'final_state': backtest_result['final_state'],
+        }
+
     def _prepare_config(self, backtest_config: Optional[dict]) -> BacktestConfig:
         """准备回测配置"""
         if not backtest_config:
@@ -225,7 +381,11 @@ class BacktestService:
             )
 
             grid_strategy['current_price'] = round(start_price, 3)
-            grid_strategy['price_range'] = {'lower': new_lower, 'upper': new_upper}
+            grid_strategy['price_range'] = {
+                'lower': new_lower,
+                'upper': new_upper,
+                'ratio': round((new_upper - new_lower) / start_price, 4) if start_price else None,
+            }
             grid_strategy['price_levels'] = price_levels
             grid_strategy['grid_config']['count'] = len(price_levels)
             grid_strategy['grid_config']['single_trade_quantity'] = fund_allocation.get(
@@ -273,7 +433,11 @@ class BacktestService:
         single_trade_quantity = custom_grid_params.get('singleTradeQuantity', fund_allocation.get('single_trade_quantity', grid_strategy['grid_config']['single_trade_quantity']))
 
         # 更新网格策略
-        grid_strategy['price_range'] = {'lower': price_lower, 'upper': price_upper}
+        grid_strategy['price_range'] = {
+            'lower': price_lower,
+            'upper': price_upper,
+            'ratio': round((price_upper - price_lower) / benchmark_price, 4) if benchmark_price else None,
+        }
         grid_strategy['current_price'] = benchmark_price
         if grid_type == '等差':
             grid_strategy['grid_config']['step_size'] = grid_step_value

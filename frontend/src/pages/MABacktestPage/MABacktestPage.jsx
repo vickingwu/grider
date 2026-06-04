@@ -1,0 +1,357 @@
+import React, { useState, useCallback } from "react";
+import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
+import {
+  ArrowLeft,
+  LineChart as LineChartIcon,
+  Info,
+  TrendingUp,
+} from "lucide-react";
+import { runMABacktest } from "@shared/services/api";
+import MABacktestChart from "./MABacktestChart";
+
+// 常用均线周期
+const PRESET_PERIODS = [5, 20, 50, 99, 128, 225];
+
+const pct = (v) => (typeof v === "number" ? (v * 100).toFixed(2) + "%" : "N/A");
+
+export default function MABacktestPage() {
+  const [code, setCode] = useState("510300");
+  const [capital, setCapital] = useState(100000);
+  const [maType, setMaType] = useState("SMA");
+  const [period, setPeriod] = useState(20);
+  const [customPeriod, setCustomPeriod] = useState("");
+  const [useCustom, setUseCustom] = useState(false);
+  const [positionRatio, setPositionRatio] = useState(100); // 百分比
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null);
+
+  const effectivePeriod = useCustom ? parseInt(customPeriod, 10) : period;
+
+  const handleRun = useCallback(async () => {
+    setError(null);
+    if (!code.trim()) {
+      setError("请输入标的代码");
+      return;
+    }
+    if (!effectivePeriod || effectivePeriod < 2 || effectivePeriod > 500) {
+      setError("均线周期应在 2-500 之间");
+      return;
+    }
+    setLoading(true);
+    setResult(null);
+    try {
+      const resp = await runMABacktest({
+        etfCode: code.trim(),
+        totalCapital: Number(capital),
+        maParams: {
+          period: effectivePeriod,
+          maType,
+          positionRatio: Number(positionRatio) / 100,
+        },
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      });
+      setResult(resp.data);
+    } catch (e) {
+      setError(e.message || "回测失败，请稍后重试");
+    } finally {
+      setLoading(false);
+    }
+  }, [code, capital, maType, effectivePeriod, positionRatio, startDate, endDate]);
+
+  const m = result?.performance_metrics;
+  const tm = result?.trading_metrics;
+  const bm = result?.benchmark_comparison;
+
+  return (
+    <>
+      <Helmet>
+        <title>均线策略回测</title>
+      </Helmet>
+
+      <div className="space-y-6">
+        {/* 标题 */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <LineChartIcon className="w-6 h-6 text-indigo-600" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">均线策略回测</h1>
+                <p className="text-sm text-gray-600">
+                  趋势跟随策略：价格上穿均线买入，下穿均线清仓
+                </p>
+              </div>
+            </div>
+            <Link to="/" className="flex items-center gap-1 text-sm text-gray-600 hover:text-indigo-600">
+              <ArrowLeft className="w-4 h-4" />
+              返回首页
+            </Link>
+          </div>
+
+          <div className="mt-4 bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-start gap-2">
+            <Info className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-indigo-800">
+              均线策略与网格策略相反：网格适合震荡行情（低买高卖），均线适合趋势行情（追涨杀跌）。
+              收盘价上穿所选均线视为金叉买入，下穿视为死叉清仓。
+            </p>
+          </div>
+        </div>
+
+        {/* 参数设置 */}
+        <div className="bg-white rounded-xl shadow-lg p-6 space-y-5">
+          <h2 className="font-semibold text-gray-900">策略参数</h2>
+
+          {/* 标的 + 资金 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">标的代码</label>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="如：510300、603137"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">投资金额（元）</label>
+              <input
+                type="number"
+                value={capital}
+                onChange={(e) => setCapital(e.target.value)}
+                step="10000"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              />
+            </div>
+          </div>
+
+          {/* 均线类型 */}
+          <div>
+            <label className="block text-sm text-gray-600 mb-2">均线类型</label>
+            <div className="flex gap-2">
+              {["SMA", "EMA"].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setMaType(t)}
+                  className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                    maType === t
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  {t === "SMA" ? "SMA 简单均线" : "EMA 指数均线"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 均线周期 */}
+          <div>
+            <label className="block text-sm text-gray-600 mb-2">均线周期（日）</label>
+            <div className="flex flex-wrap gap-2 items-center">
+              {PRESET_PERIODS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => {
+                    setPeriod(p);
+                    setUseCustom(false);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                    !useCustom && period === p
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  {p}日
+                </button>
+              ))}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setUseCustom(true)}
+                  className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                    useCustom
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  自定义
+                </button>
+                {useCustom && (
+                  <input
+                    type="number"
+                    value={customPeriod}
+                    onChange={(e) => setCustomPeriod(e.target.value)}
+                    placeholder="周期"
+                    min="2"
+                    max="500"
+                    className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 仓位比例 */}
+          <div>
+            <label className="block text-sm text-gray-600 mb-2">
+              买入仓位比例：<span className="font-medium text-gray-900">{positionRatio}%</span>
+            </label>
+            <input
+              type="range"
+              min="10"
+              max="100"
+              step="10"
+              value={positionRatio}
+              onChange={(e) => setPositionRatio(e.target.value)}
+              className="w-full md:w-1/2"
+            />
+            <p className="text-xs text-gray-500 mt-1">每次金叉买入时投入可用资金的比例，默认满仓 100%</p>
+          </div>
+
+          {/* 回测区间（可选） */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">开始日期（可选）</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">结束日期（可选）</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 -mt-2">留空默认回测最近半年（约182天）。跨度超过120天自动使用日线。</p>
+
+          <button
+            onClick={handleRun}
+            disabled={loading}
+            className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium"
+          >
+            {loading ? "回测中..." : "开始回测"}
+          </button>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
+          )}
+        </div>
+
+        {/* 结果 */}
+        {loading && (
+          <div className="bg-white rounded-xl shadow-lg p-12 text-center text-gray-600">
+            正在回测，请稍候...
+          </div>
+        )}
+
+        {result && !loading && (
+          <>
+            {/* 指标概览 */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <h2 className="font-semibold text-gray-900">
+                  {result.etf_info?.name}（{result.etf_info?.code}） · {result.ma_config?.ma_type}
+                  {result.ma_config?.period}日均线 · 仓位{Math.round((result.ma_config?.position_ratio || 1) * 100)}%
+                </h2>
+                <span className="text-sm text-gray-500">
+                  {result.backtest_period?.start_date} ~ {result.backtest_period?.end_date}
+                  （{result.backtest_period?.trading_days}个交易日）
+                </span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Metric label="策略总收益" value={pct(m?.total_return)} positive={m?.total_return} />
+                <Metric label="持有不动收益" value={pct(bm?.hold_return)} positive={bm?.hold_return} />
+                <Metric label="超额收益" value={pct(bm?.excess_return)} positive={bm?.excess_return} />
+                <Metric label="年化收益" value={pct(m?.annualized_return)} positive={m?.annualized_return} />
+                <Metric label="最大回撤" value={pct(m?.max_drawdown)} positive={0} />
+                <Metric label="夏普比率" value={m?.sharpe_ratio != null ? m.sharpe_ratio.toFixed(2) : "N/A"} />
+                <Metric label="交易次数" value={`${tm?.total_trades}（买${tm?.buy_trades}/卖${tm?.sell_trades}）`} />
+                <Metric label="胜率" value={pct(tm?.win_rate)} />
+              </div>
+            </div>
+
+            {/* 图表 */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <TrendingUp className="w-5 h-5 text-indigo-600" />
+                <h2 className="font-semibold text-gray-900">价格 / 均线 / 买卖点</h2>
+              </div>
+              <MABacktestChart
+                priceCurve={result.price_curve}
+                maCurve={result.ma_curve}
+                tradeRecords={result.trade_records}
+                maLabel={`${result.ma_config?.ma_type}${result.ma_config?.period}`}
+              />
+            </div>
+
+            {/* 交易记录 */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h2 className="font-semibold text-gray-900 mb-4">交易记录（{result.trade_records?.length || 0} 笔）</h2>
+              <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b border-gray-200 text-gray-500 text-left">
+                      <th className="py-2 px-2">时间</th>
+                      <th className="py-2 px-2">方向</th>
+                      <th className="py-2 px-2 text-right">价格</th>
+                      <th className="py-2 px-2 text-right">数量</th>
+                      <th className="py-2 px-2 text-right">手续费</th>
+                      <th className="py-2 px-2 text-right">持仓</th>
+                      <th className="py-2 px-2 text-right">现金</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.trade_records?.map((t, i) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="py-2 px-2 text-gray-600">{t.time}</td>
+                        <td className="py-2 px-2">
+                          <span className={t.type === "BUY" ? "text-up-600" : "text-down-600"}>
+                            {t.type === "BUY" ? "买入" : "卖出"}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-right">{t.price?.toFixed(3)}</td>
+                        <td className="py-2 px-2 text-right">{t.quantity}</td>
+                        <td className="py-2 px-2 text-right text-gray-500">{t.commission?.toFixed(2)}</td>
+                        <td className="py-2 px-2 text-right">{t.position}</td>
+                        <td className="py-2 px-2 text-right text-gray-500">{t.cash?.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {(!result.trade_records || result.trade_records.length === 0) && (
+                  <p className="text-center text-gray-500 py-8">该区间内未触发任何买卖信号</p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function Metric({ label, value, positive }) {
+  let color = "text-gray-900";
+  if (typeof positive === "number") {
+    color = positive > 0 ? "text-up-600" : positive < 0 ? "text-down-600" : "text-gray-900";
+  }
+  return (
+    <div className="bg-gray-50 rounded-lg p-4">
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className={`text-lg font-bold ${color}`}>{value}</p>
+    </div>
+  );
+}

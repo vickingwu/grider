@@ -3,7 +3,6 @@ import { LoadingSpinner } from "@shared/components/ui";
 import ReportTabs from "./ReportTabs";
 import OverviewTab from "./OverviewTab";
 import ErrorState from "./ErrorState";
-import Disclaimer from "./Disclaimer";
 import SuitabilityCard from "./ReportCards/SuitabilityCard";
 import GridParametersCard from "./ReportCards/GridParametersCard";
 
@@ -178,9 +177,6 @@ const AnalysisReport = ({
           )}
         </div>
       </div>
-
-      {/* 免责声明 */}
-      <Disclaimer />
     </div>
   );
 };

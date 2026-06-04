@@ -150,3 +150,76 @@ def run_backtest():
             'success': False,
             'error': '回测执行失败，请稍后重试'
         }), HTTP_INTERNAL_SERVER_ERROR
+
+
+@bp.route('/ma-backtest', methods=['POST'])
+def run_ma_backtest():
+    """
+    执行均线策略回测（趋势跟随）
+
+    请求格式:
+    {
+        "etfCode": "510300",
+        "totalCapital": 100000,
+        "maParams": { "period": 20, "maType": "SMA", "positionRatio": 1.0 },
+        "backtestConfig": {...},     // 可选
+        "startDate": "2024-01-01",   // 可选
+        "endDate": "2024-12-31"      // 可选
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': '请求参数不能为空'}), HTTP_BAD_REQUEST
+
+        raw_code = (data.get('etfCode') or '').strip()
+        if not raw_code:
+            return jsonify({'success': False, 'error': '标的代码不能为空'}), HTTP_BAD_REQUEST
+
+        etf_code, country = determine_country(raw_code)
+
+        # 解析标的信息（交易所、证券类型）
+        analysis_service = ETFAnalysisService(country=country)
+        info = analysis_service.data_client.search_by_ticker(etf_code, country)
+        exchange_code = info.get('exchange_code', '')
+        sec_type = info.get('type', 'STOCK')
+
+        total_capital = float(data.get('totalCapital', 100000))
+
+        ma_in = data.get('maParams') or {}
+        ma_params = {
+            'period': int(ma_in.get('period', 20)),
+            'ma_type': ma_in.get('maType', 'SMA'),
+            'position_ratio': float(ma_in.get('positionRatio', 1.0)),
+        }
+        if ma_params['period'] < 2 or ma_params['period'] > 500:
+            return jsonify({'success': False, 'error': '均线周期应在2-500之间'}), HTTP_BAD_REQUEST
+
+        backtest_service = BacktestService()
+        result = backtest_service.run_ma_backtest(
+            etf_code=etf_code,
+            exchange_code=exchange_code,
+            ma_params=ma_params,
+            total_capital=total_capital,
+            backtest_config=data.get('backtestConfig'),
+            type=sec_type,
+            country=country,
+            start_date_in=data.get('startDate', '') or '',
+            end_date_in=data.get('endDate', '') or '',
+        )
+        # 补充标的名称，便于前端展示
+        result['etf_info'] = {
+            'code': etf_code,
+            'name': info.get('name', etf_code),
+            'exchange_code': exchange_code,
+            'type': sec_type,
+            'country': country,
+        }
+        return jsonify({'success': True, 'data': result}), HTTP_OK
+
+    except ValueError as e:
+        logger.warning(f"均线回测参数错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), HTTP_BAD_REQUEST
+    except Exception as e:
+        logger.error(f"均线回测执行异常: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': '均线回测执行失败，请稍后重试'}), HTTP_INTERNAL_SERVER_ERROR
