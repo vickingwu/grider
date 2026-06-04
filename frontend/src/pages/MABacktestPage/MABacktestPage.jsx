@@ -15,6 +15,11 @@ const PRESET_PERIODS = [5, 20, 50, 99, 128, 225];
 
 const pct = (v) => (typeof v === "number" ? (v * 100).toFixed(2) + "%" : "N/A");
 
+// 计算默认回测区间：最近半年（182自然日）
+const toYMD = (d) => d.toISOString().slice(0, 10);
+const DEFAULT_END = toYMD(new Date());
+const DEFAULT_START = toYMD(new Date(Date.now() - 182 * 24 * 3600 * 1000));
+
 export default function MABacktestPage() {
   const [code, setCode] = useState("510300");
   const [capital, setCapital] = useState(100000);
@@ -23,8 +28,8 @@ export default function MABacktestPage() {
   const [customPeriod, setCustomPeriod] = useState("");
   const [useCustom, setUseCustom] = useState(false);
   const [positionRatio, setPositionRatio] = useState(100); // 百分比
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState(DEFAULT_START);
+  const [endDate, setEndDate] = useState(DEFAULT_END);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -235,7 +240,7 @@ export default function MABacktestPage() {
               />
             </div>
           </div>
-          <p className="text-xs text-gray-500 -mt-2">留空默认回测最近半年（约182天）。跨度超过120天自动使用日线。</p>
+          <p className="text-xs text-gray-500 -mt-2">默认回测最近半年（已预填，可自行调整）。长周期均线（如128/225日）会自动往前取预热数据，无需手动拉长区间。跨度超过120天自动使用日线。</p>
 
           <button
             onClick={handleRun}

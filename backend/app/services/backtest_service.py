@@ -173,33 +173,55 @@ class BacktestService:
         try:
             config = self._prepare_config(backtest_config)
 
-            # 解析日期范围（与网格回测一致）
+            # 解析回测区间（用户视角的起止）
             start_date, end_date, trading_days = self._resolve_date_range(
                 exchange_code, start_date_in, end_date_in
             )
 
-            # 获取K线（跨度>120天自动用日线）
-            kline_data = self.data_service.get_5min_kline(
-                etf_code, exchange_code, start_date, end_date, type
-            )
-            if not kline_data:
-                raise ValueError(f"无法获取K线数据: {start_date} - {end_date}")
-            logger.info(f"均线回测获取到 {len(kline_data)} 条K线数据")
-
-            # 校验均线周期不超过数据量
             period = int(ma_params.get('period', 20))
-            if period >= len(kline_data):
-                raise ValueError(f"均线周期({period})过长，超过回测数据条数({len(kline_data)})，请缩短周期或拉长回测区间")
 
-            # 执行均线回测
+            # 均线预热：在回测开始日之前额外多取 period(+缓冲) 个交易日，
+            # 使长周期均线（如128/225日）在回测区间首日即可计算，
+            # 预热段只用于喂均线，不参与买卖与收益统计。
+            warmup_bars = period + 5
+            fetch_start = self._shift_trading_days_back(exchange_code, start_date, warmup_bars)
+
+            # 获取K线（含预热段）
+            kline_all = self.data_service.get_5min_kline(
+                etf_code, exchange_code, fetch_start, end_date, type
+            )
+            if not kline_all:
+                raise ValueError(f"无法获取K线数据: {fetch_start} - {end_date}")
+
+            # 定位回测段起始下标（第一根 >= start_date 的bar）
+            start_cmp = start_date
+            trade_start_index = 0
+            for idx, kb in enumerate(kline_all):
+                if kb.time.strftime('%Y-%m-%d') >= start_cmp:
+                    trade_start_index = idx
+                    break
+
+            window_len = len(kline_all) - trade_start_index
+            logger.info(f"均线回测: 总K线{len(kline_all)}(含预热{trade_start_index}), 回测段{window_len}, 周期{period}")
+
+            # 校验：预热不足以支撑该周期（标的上市时间太短等）
+            if trade_start_index < period:
+                # 预热段不足 period 根：均线在回测段前期可能缺失，但仍可继续；
+                # 仅当连"回测段长度"都不足以判断时才报错。
+                if window_len < 2:
+                    raise ValueError(f"数据不足以回测{period}日均线，请缩短周期或选更长区间")
+
+            # 执行均线回测（带预热）
             fee_calc = FeeCalculator(
                 commission_rate=config.commission_rate,
                 min_commission=config.min_commission,
             )
             engine = MABacktestEngine(ma_params, fee_calc, total_capital, country=country)
-            backtest_result = engine.run(kline_data)
+            backtest_result = engine.run(kline_all, trade_start_index=trade_start_index)
 
-            # 计算指标（grid_count 传 0，网格相关指标对均线无意义）
+            # 仅用回测段（窗口）计算指标与价格基准
+            window_kline = kline_all[trade_start_index:]
+
             metrics_calc = MetricsCalculator(
                 trading_days_per_year=config.trading_days_per_year,
                 risk_free_rate=config.risk_free_rate,
@@ -209,7 +231,7 @@ class BacktestService:
                 final_capital=backtest_result['final_state']['total_asset'],
                 equity_curve=backtest_result['equity_curve'],
                 trade_records=backtest_result['trade_records'],
-                price_curve=[{'close': k.close} for k in kline_data],
+                price_curve=[{'close': k.close} for k in window_kline],
                 grid_count=0,
             )
 
@@ -220,12 +242,43 @@ class BacktestService:
                 start_date=start_date,
                 end_date=end_date,
                 trading_days=len(trading_days),
-                kline_data=kline_data,
+                kline_data=window_kline,
                 ma_params=ma_params,
+                ma_series_full=backtest_result.get('ma_series', []),
+                trade_start_index=trade_start_index,
             )
         except Exception as e:
             logger.error(f"均线回测执行失败: {str(e)}", exc_info=True)
             raise
+
+    def _shift_trading_days_back(self, exchange_code: str, date_str: str, n_days: int) -> str:
+        """返回 date_str 之前第 n_days 个交易日（用于均线预热取数起点）。
+
+        取不到足够交易日历时，按自然日粗略回退兜底。
+        """
+        try:
+            # 取一段足够长的历史交易日历（用大区间，向前覆盖）
+            from datetime import datetime as _dt, timedelta as _td
+            end = date_str
+            # 自然日上预留：n_days 个交易日约等于 n_days*1.5 自然日，再加缓冲
+            start = (_dt.strptime(date_str, '%Y-%m-%d') - _td(days=int(n_days * 1.7) + 40)).strftime('%Y-%m-%d')
+            cal = self.data_service.get_trading_calendar(
+                exchange_code, start_date=start, end_date=end
+            )
+            # cal 为降序（最新在前），且包含 <= date_str 的交易日
+            cal_sorted = sorted(set(cal))  # 升序
+            # 只保留 < date_str 的交易日作为预热
+            before = [d for d in cal_sorted if d < date_str]
+            if len(before) >= n_days:
+                return before[-n_days]
+            if before:
+                return before[0]
+            # 兜底：自然日回退
+            return start
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"计算预热起始日失败，使用自然日兜底: {e}")
+            from datetime import datetime as _dt, timedelta as _td
+            return (_dt.strptime(date_str, '%Y-%m-%d') - _td(days=int(n_days * 1.7) + 40)).strftime('%Y-%m-%d')
 
     def _resolve_date_range(self, exchange_code: str, custom_start: str, custom_end: str):
         """解析回测日期范围，返回 (start_date, end_date, trading_days)。"""
@@ -261,16 +314,23 @@ class BacktestService:
 
     def _format_ma_result(self, backtest_result: Dict, metrics, benchmark,
                           start_date: str, end_date: str, trading_days: int,
-                          kline_data: list, ma_params: dict) -> Dict:
-        """格式化均线回测结果（结构对齐网格回测，便于前端复用）。"""
-        # 均线序列与时间对齐，供前端叠加绘制
-        ma_series = backtest_result.get('ma_series', [])
+                          kline_data: list, ma_params: dict,
+                          ma_series_full: list = None, trade_start_index: int = 0) -> Dict:
+        """格式化均线回测结果（结构对齐网格回测，便于前端复用）。
+
+        kline_data 为回测段（窗口）K线；ma_series_full 为含预热段的完整均线序列，
+        需切片到窗口对齐后返回，使前端均线曲线与窗口价格曲线一一对应。
+        """
+        # 将完整均线序列切片到回测窗口
+        if ma_series_full is None:
+            ma_series_full = backtest_result.get('ma_series', [])
+        ma_window = ma_series_full[trade_start_index:] if ma_series_full else []
         ma_curve = [
             {
                 'time': k.time.strftime('%Y-%m-%d %H:%M:%S'),
                 'ma': round(ma, 3) if ma is not None else None,
             }
-            for k, ma in zip(kline_data, ma_series)
+            for k, ma in zip(kline_data, ma_window)
         ]
         return {
             'strategy_type': 'ma',

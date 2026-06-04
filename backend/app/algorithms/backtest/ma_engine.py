@@ -69,9 +69,18 @@ class MABacktestEngine:
         """按最小交易单位向下取整。"""
         return (quantity // self.min_unit) * self.min_unit
 
-    def run(self, kline_data: List[KBar]) -> Dict:
+    def run(self, kline_data: List[KBar], trade_start_index: int = 0) -> Dict:
+        """执行均线回测。
+
+        Args:
+            kline_data: 完整K线（含预热段 + 回测段）
+            trade_start_index: 回测段起始下标。该下标之前的 bar 仅用于计算均线/
+                判定穿越状态（预热），不交易、不计入资产曲线与收益。
+        """
         if not kline_data:
             raise ValueError("K线数据为空")
+        if trade_start_index < 0 or trade_start_index >= len(kline_data):
+            trade_start_index = 0
 
         closes = [k.close for k in kline_data]
         self.ma_series = calculate_ma(closes, self.period, self.ma_type)
@@ -79,62 +88,92 @@ class MABacktestEngine:
         cash = self.total_capital
         position = 0
         prev_above: Optional[bool] = None  # 上一根：价格是否在均线之上
+        entered_window = False
 
         for i, kbar in enumerate(kline_data):
             ma = self.ma_series[i]
             price = kbar.close
+            in_window = i >= trade_start_index
 
-            # 均线尚未生效（数据不足）：仅记录资产曲线
+            # 均线尚未生效（数据不足）
             if ma is None:
-                total_asset = cash + position * price
-                self.equity_curve.append({"time": kbar.time, "total_asset": total_asset, "price": price})
+                if in_window:
+                    total_asset = cash + position * price
+                    self.equity_curve.append({"time": kbar.time, "total_asset": total_asset, "price": price})
                 continue
 
             above = price > ma
 
-            # 信号判定（穿越）
+            # 预热段：只更新穿越状态，不交易、不记录资产
+            if not in_window:
+                prev_above = above
+                continue
+
+            # 进入回测段的第一根有效bar：若此刻已处于均线之上（多头），直接建仓
+            if not entered_window:
+                entered_window = True
+                if above and position == 0 and cash > 0:
+                    cash, position = self._buy(kbar, price, cash, position)
+                prev_above = above
+                total_asset = cash + position * price
+                self.equity_curve.append({"time": kbar.time, "total_asset": total_asset, "price": price})
+                continue
+
+            # 后续bar：按金叉/死叉交易
             if prev_above is not None:
-                # 金叉：由下方穿到上方 → 买入
                 if above and not prev_above and position == 0 and cash > 0:
-                    invest = cash * self.position_ratio
-                    raw_qty = int(invest / price) if price > 0 else 0
-                    qty = self._round_quantity(raw_qty)
-                    if qty > 0:
-                        cost = self.fee_calc.calculate_buy_cost(price, qty)
-                        # 资金不足则减一手
-                        while cost > cash and qty > self.min_unit:
-                            qty -= self.min_unit
-                            cost = self.fee_calc.calculate_buy_cost(price, qty)
-                        if qty > 0 and cost <= cash:
-                            commission = self.fee_calc.calculate(price * qty)
-                            cash -= cost
-                            position += qty
-                            self.trade_records.append(TradeRecord(
-                                time=kbar.time, type="BUY", price=price, quantity=qty,
-                                commission=commission, profit=None, position=position, cash=cash,
-                            ))
-                # 死叉：由上方穿到下方 → 清仓
+                    cash, position = self._buy(kbar, price, cash, position)
                 elif not above and prev_above and position > 0:
-                    income = self.fee_calc.calculate_sell_income(price, position)
-                    commission = self.fee_calc.calculate(price * position)
-                    cash += income
-                    sold_qty = position
-                    position = 0
-                    self.trade_records.append(TradeRecord(
-                        time=kbar.time, type="SELL", price=price, quantity=sold_qty,
-                        commission=commission, profit=None, position=position, cash=cash,
-                    ))
+                    cash, position = self._sell(kbar, price, cash, position)
 
             prev_above = above
-
             total_asset = cash + position * price
             self.equity_curve.append({"time": kbar.time, "total_asset": total_asset, "price": price})
 
-        final_asset = cash + position * kline_data[-1].close
+        final_price = kline_data[-1].close
+        final_asset = cash + position * final_price
         return {
             "trade_records": self.trade_records,
             "equity_curve": self.equity_curve,
             "final_state": {"cash": cash, "position": position, "total_asset": final_asset},
             "kline_data": kline_data,
             "ma_series": self.ma_series,
+            "trade_start_index": trade_start_index,
         }
+
+    def _buy(self, kbar: KBar, price: float, cash: float, position: int):
+        """按可用资金 * 仓位比例买入（向最小单位取整）。"""
+        invest = cash * self.position_ratio
+        raw_qty = int(invest / price) if price > 0 else 0
+        qty = self._round_quantity(raw_qty)
+        if qty <= 0:
+            return cash, position
+        cost = self.fee_calc.calculate_buy_cost(price, qty)
+        while cost > cash and qty > self.min_unit:
+            qty -= self.min_unit
+            cost = self.fee_calc.calculate_buy_cost(price, qty)
+        if qty <= 0 or cost > cash:
+            return cash, position
+        commission = self.fee_calc.calculate(price * qty)
+        cash -= cost
+        position += qty
+        self.trade_records.append(TradeRecord(
+            time=kbar.time, type="BUY", price=price, quantity=qty,
+            commission=commission, profit=None, position=position, cash=cash,
+        ))
+        return cash, position
+
+    def _sell(self, kbar: KBar, price: float, cash: float, position: int):
+        """清仓卖出。"""
+        if position <= 0:
+            return cash, position
+        income = self.fee_calc.calculate_sell_income(price, position)
+        commission = self.fee_calc.calculate(price * position)
+        cash += income
+        sold_qty = position
+        position = 0
+        self.trade_records.append(TradeRecord(
+            time=kbar.time, type="SELL", price=price, quantity=sold_qty,
+            commission=commission, profit=None, position=position, cash=cash,
+        ))
+        return cash, position
