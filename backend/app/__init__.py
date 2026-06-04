@@ -96,7 +96,7 @@ def setup_static_routes(app):
             return None
 
         # 定义前端路由路径（这些路径应该返回 index.html）
-        frontend_routes = ['analysis', 'dashboard', 'settings', 'help']
+        frontend_routes = ['analysis', 'dashboard', 'settings', 'help', 'screener']
 
         # 检查是否是前端路由
         if any(path.startswith(route) for route in frontend_routes):

@@ -175,6 +175,68 @@ ETF_POPULAR_LIST: Final[list] = [
     {'code': 'SPY', 'name': 'S&P500ETF'}
 ]
 
+# ============================================================================
+# 网格标的筛选器候选池
+# ============================================================================
+# 适合网格交易筛选的主流 ETF 候选池（流动性较好，覆盖宽基/行业/跨境/红利/商品债券）。
+# 想增减标的：直接编辑此列表即可（前端无需改动，筛选页会自动按此列表评分）。
+SCREENER_CANDIDATES: Final[list] = [
+    # ---------- 宽基指数 ETF ----------
+    {'code': '510300', 'name': '沪深300ETF', 'category': '宽基指数'},
+    {'code': '510500', 'name': '中证500ETF', 'category': '宽基指数'},
+    {'code': '510050', 'name': '上证50ETF', 'category': '宽基指数'},
+    {'code': '159915', 'name': '创业板ETF', 'category': '宽基指数'},
+    {'code': '588000', 'name': '科创50ETF', 'category': '宽基指数'},
+    {'code': '588080', 'name': '科创板50ETF', 'category': '宽基指数'},
+    {'code': '512100', 'name': '中证1000ETF', 'category': '宽基指数'},
+    {'code': '159949', 'name': '创业板50ETF', 'category': '宽基指数'},
+    {'code': '510180', 'name': '上证180ETF', 'category': '宽基指数'},
+    {'code': '159901', 'name': '深100ETF', 'category': '宽基指数'},
+    # ---------- 行业/主题 ETF ----------
+    {'code': '512880', 'name': '证券ETF', 'category': '行业主题'},
+    {'code': '512000', 'name': '券商ETF', 'category': '行业主题'},
+    {'code': '512170', 'name': '医疗ETF', 'category': '行业主题'},
+    {'code': '512010', 'name': '医药ETF', 'category': '行业主题'},
+    {'code': '159928', 'name': '消费ETF', 'category': '行业主题'},
+    {'code': '512690', 'name': '酒ETF', 'category': '行业主题'},
+    {'code': '512480', 'name': '半导体ETF', 'category': '行业主题'},
+    {'code': '159995', 'name': '芯片ETF', 'category': '行业主题'},
+    {'code': '515050', 'name': '5G通信ETF', 'category': '行业主题'},
+    {'code': '159819', 'name': '人工智能ETF', 'category': '行业主题'},
+    {'code': '516160', 'name': '新能源ETF', 'category': '行业主题'},
+    {'code': '515030', 'name': '新能源车ETF', 'category': '行业主题'},
+    {'code': '512200', 'name': '房地产ETF', 'category': '行业主题'},
+    {'code': '512660', 'name': '军工ETF', 'category': '行业主题'},
+    {'code': '512800', 'name': '银行ETF', 'category': '行业主题'},
+    {'code': '515790', 'name': '光伏ETF', 'category': '行业主题'},
+    {'code': '159611', 'name': '电力ETF', 'category': '行业主题'},
+    {'code': '512290', 'name': '生物医药ETF', 'category': '行业主题'},
+    {'code': '159766', 'name': '旅游ETF', 'category': '行业主题'},
+    {'code': '516010', 'name': '游戏ETF', 'category': '行业主题'},
+    # ---------- 跨境/海外 ETF ----------
+    {'code': '513100', 'name': '纳指ETF', 'category': '跨境海外'},
+    {'code': '159941', 'name': '纳指ETF', 'category': '跨境海外'},
+    {'code': '513050', 'name': '中概互联网ETF', 'category': '跨境海外'},
+    {'code': '159607', 'name': '中概互联ETF', 'category': '跨境海外'},
+    {'code': '513180', 'name': '恒生科技指数ETF', 'category': '跨境海外'},
+    {'code': '159742', 'name': '恒生科技ETF', 'category': '跨境海外'},
+    {'code': '159920', 'name': '恒生ETF', 'category': '跨境海外'},
+    {'code': '513500', 'name': '标普500ETF', 'category': '跨境海外'},
+    {'code': '513030', 'name': '德国ETF', 'category': '跨境海外'},
+    {'code': '513080', 'name': '法国CAC40ETF', 'category': '跨境海外'},
+    # ---------- 红利/价值 ----------
+    {'code': '510880', 'name': '红利ETF', 'category': '红利价值'},
+    {'code': '515180', 'name': '红利ETF', 'category': '红利价值'},
+    {'code': '512890', 'name': '红利低波ETF', 'category': '红利价值'},
+    # ---------- 商品/债券 ----------
+    {'code': '518880', 'name': '黄金ETF', 'category': '商品债券'},
+    {'code': '159934', 'name': '黄金ETF', 'category': '商品债券'},
+    {'code': '161226', 'name': '白银LOF', 'category': '商品债券'},
+    {'code': '501018', 'name': '南方原油LOF', 'category': '商品债券'},
+    {'code': '511260', 'name': '十年国债ETF', 'category': '商品债券'},
+    {'code': '511010', 'name': '国债ETF', 'category': '商品债券'},
+]
+
 # 常用资金
 CAPITAL_PRESETS: Final[list] = [
     {'value': 100000, 'label': '10万', 'popular': True},
@@ -225,6 +287,6 @@ __all__ = [
     'MIN_PASSWORD_LENGTH', 'MAX_PASSWORD_LENGTH',
 
     # 业务相关
-    'ETF_POPULAR_LIST', 'CAPITAL_PRESETS',
+    'ETF_POPULAR_LIST', 'CAPITAL_PRESETS', 'SCREENER_CANDIDATES',
     
 ]

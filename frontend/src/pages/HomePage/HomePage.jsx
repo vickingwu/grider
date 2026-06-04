@@ -1,5 +1,7 @@
 import React from "react";
 import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
+import { Filter } from "lucide-react";
 import ParameterForm from "@features/analysis/components/ParameterForm";
 import AnalysisHistory from "@features/history/components/AnalysisHistory";
 import { generateAnalysisURL } from "@shared/utils/url";
@@ -27,6 +29,17 @@ export default function HomePage() {
       </Helmet>
 
       <div className="space-y-8">
+        {/* 标的筛选器入口 */}
+        <div className="flex justify-end">
+          <Link
+            to="/screener"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-600 rounded-lg shadow-sm hover:bg-blue-50 transition-colors text-sm font-medium"
+          >
+            <Filter className="w-4 h-4" />
+            网格标的筛选器
+          </Link>
+        </div>
+
         <ParameterForm onAnalysis={handleAnalysis} />
 
         <AnalysisHistory />

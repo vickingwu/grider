@@ -23,6 +23,36 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# 为 akshare 底层的 requests 调用注入默认超时
+# ---------------------------------------------------------------------------
+# akshare 多数接口调用 requests 时不传 timeout，遇到网络异常会无限阻塞，
+# 进而拖死线程/请求。这里给 requests.Session.request 注入一个默认超时，
+# 仅影响“对外的 HTTP 请求”，不会影响 Flask/werkzeug 自身的监听 socket。
+_DEFAULT_HTTP_TIMEOUT = 12  # 秒
+
+def _patch_requests_default_timeout():
+    try:
+        import requests
+        if getattr(requests.Session, "_default_timeout_patched", False):
+            return
+        _orig_request = requests.Session.request
+
+        def _request_with_timeout(self, method, url, **kwargs):
+            if kwargs.get("timeout") is None:
+                kwargs["timeout"] = _DEFAULT_HTTP_TIMEOUT
+            return _orig_request(self, method, url, **kwargs)
+
+        requests.Session.request = _request_with_timeout
+        requests.Session._default_timeout_patched = True
+        logger.info(f"已为 requests 注入默认超时 {_DEFAULT_HTTP_TIMEOUT}s")
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"注入 requests 默认超时失败: {e}")
+
+_patch_requests_default_timeout()
+
+
 # 简单的进程内缓存（带 TTL），减少对外部接口的重复请求
 _CACHE_LOCK = threading.Lock()
 _CACHE = {}
@@ -99,6 +129,8 @@ _ETF_NAME_MAP = {
     "512480": "半导体ETF", "159819": "人工智能ETF", "159742": "恒生科技ETF",
     "159949": "创业板50ETF", "510050": "上证50ETF", "512100": "中证1000ETF",
     "513050": "中概互联网ETF", "513180": "恒生科技指数ETF", "518880": "黄金ETF",
+    # LOF（名称表多不含，内置补充）
+    "161226": "白银LOF", "501018": "南方原油LOF",
 }
 
 

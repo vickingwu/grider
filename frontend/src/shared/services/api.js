@@ -85,6 +85,14 @@ class ApiService {
   }
 
   /**
+   * 运行网格标的筛选器（批量评估候选池，按适宜度排序）
+   * @param {boolean} forceRefresh - 是否忽略缓存强制重算
+   */
+  async runScreener(forceRefresh = false) {
+    return this.get("/screener", forceRefresh ? { refresh: 1 } : {});
+  }
+
+  /**
    * 健康检查
    */
   async healthCheck() {
@@ -129,6 +137,7 @@ const apiService = new ApiService();
 export const analyzeETF = (parameters) => apiService.analyzeETF(parameters);
 export const getETFInfo = (etfCode) => apiService.getETFInfo(etfCode);
 export const getPopularETFs = () => apiService.getPopularETFs();
+export const runScreener = (forceRefresh) => apiService.runScreener(forceRefresh);
 export const healthCheck = () => apiService.healthCheck();
 export const getVersion = () => apiService.getVersion();
 export const runBacktest = (etfCode, exchangeCode, gridStrategy, backtestConfig, type, customGridParams) =>
