@@ -1,6 +1,6 @@
 # ETFer-Clone 项目进度存档
 
-> 最后更新：2026-06-04。新增「网格标的筛选器」功能并完成验证。
+> 最后更新：2026-06-04。新增「均线策略回测」+「网格标的筛选器」，并修复若干问题。
 
 ## 一、项目概况
 
@@ -133,7 +133,35 @@
 - **网格策略↔回测联动**：`AnalysisReport.jsx` 新增 `effectiveGrid`，回测中编辑的网格会同步到
   "网格策略"标签显示（带自定义提示横幅）；切换标签不再丢失编辑参数（`backtestMounted` 保持挂载）。
 
-## 十四、待办
+## 十四、均线策略回测（已完成）
+
+- **目标**：在网格回测之外，新增一种完全不同的**趋势跟随**回测方式，独立页面、不与网格流程复用。
+- **策略**：单均线——收盘价上穿所选均线买入（按仓位比例），下穿清仓。
+- **后端**：
+  - 新增 `algorithms/backtest/ma_engine.py`：`calculate_ma`(SMA/EMA) + `MABacktestEngine`，
+    复用 `KBar/TradeRecord/FeeCalculator`，输出结构对齐网格回测（trade_records/equity_curve/final_state + ma_series）。
+  - `backtest_service.py`：新增 `run_ma_backtest()` + `_resolve_date_range()`(抽出复用) + `_format_ma_result()`；
+    复用 `MetricsCalculator`（grid_count 传 0）。
+  - `grid_routes.py`：新增 `POST /api/grid/ma-backtest`，按代码 `determine_country` 解析交易所/类型，
+    入参 `{etfCode,totalCapital,maParams{period,maType,positionRatio},startDate,endDate}`。
+  - `__init__.py` SPA 白名单加 `ma-backtest`。
+- **前端**：
+  - 新页面 `pages/MABacktestPage/`（页面 + `MABacktestChart.jsx` 价格/均线/买卖点叠加图），路由 `/ma-backtest`，首页入口按钮。
+  - 周期预设 5/20/50/99/128/225 + 自定义；SMA/EMA 切换；仓位 10%~100% 滑块；可选日期。
+  - `api.js` 新增 `runMABacktest()`。
+- **验证**：浏览器实测 510300 SMA20 → 13 笔、+0.73%（持有 +6.61%，震荡市均线被洗，正常）；
+  SMA50 → 3 笔、贴合趋势；图表/指标/交易表均正常，数字与后端直测一致。
+
+## 十五、本轮其它修复
+
+- **#2 删除底部免责声明**：`AnalysisReport.jsx` 移除底部黄色「重要声明」块（`Disclaimer.jsx` 文件保留但已不引用）。
+- **#3 网格区间跨度显示 N/A 修复**：根因是回测重建网格时 `price_range` 只写 `{lower,upper}`、漏了 `ratio`，
+  导致"网格策略"标签显示回测网格(effectiveGrid)时 `formatPercent(ratio)` 返回 N/A。
+  已在 `_realign_grid_to_period` 与 `_apply_custom_grid_params` 两处补回 `ratio=(upper-lower)/基准价`。
+- **#4 市场环境分析/策略调整建议**：确认为**动态规则驱动**（波动率/ADX/网格数/资金利用率阈值触发），非写死，
+  按用户要求保持现状（仅"ATR算法优势"4条科普文案是写死的，合理保留）。
+
+## 十六、待办
 
 - （可选）邮件发送报告(SMTP)功能尚未做。
 - （可选）港股 / 美股支持：当前数据层仅接通 A 股（含 ETF）；AkShare 有免费港美股接口，
@@ -141,4 +169,4 @@
 
 ## 临时文件
 
-- 已清理 `backend\_probe.py` / `test_screen*.py` / `test_screener.py` / 各 `*_result.txt` 等。
+- 已清理 `backend\_probe.py` / `test_screen*.py` / `test_ma.py` / `test_screener.py` / 各 `*_result.txt` 等。
