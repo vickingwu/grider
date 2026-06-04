@@ -1,6 +1,6 @@
 # ETFer-Clone 项目进度存档
 
-> 最后更新：2026-06-02。本轮 7 项修改 + 10年跨度已全部完成并验证。
+> 最后更新：2026-06-04。新增「网格标的筛选器」功能并完成验证。
 
 ## 一、项目概况
 
@@ -101,10 +101,44 @@
   - 近期区间 + 当前价网格 → 16 笔、+2.92%、realigned=None（未误触发，尊重用户网格）。
   - 浏览器：首页勾选→自动编辑→默认近30日回测 20 笔、胜率87.5%、+4.45%，图表与交易记录正常。
 
-## 十二、待办
+## 十二、网格标的筛选器（已完成）
+
+- **目标**：从"单标的体检"扩展出"批量挑选"——一键对主流 ETF 候选池评分排序。
+- **后端**：
+  - `constants.py` 新增 `SCREENER_CANDIDATES`（约 50 只：宽基/行业/跨境/红利/商品债券，可自行增减）。
+  - `services/screener_service.py`：复用 `ETFAnalysisService` + `SuitabilityAnalyzer`，
+    `ThreadPoolExecutor`(4 并发) 批量评分，结果按总分降序，整体缓存 1 小时。
+  - `routes/screener_routes.py`：`GET /api/screener`（?refresh=1 强制重算）、`/api/screener/candidates`。
+  - 蓝图注册 `url_prefix=/api/screener`；`__init__.py` SPA 路由白名单加 `screener`。
+- **前端**：
+  - 新页面 `pages/ScreenerPage/`，路由 `/screener`，首页右上角入口按钮。
+  - 表格：排名/代码/名称/分类/总分/ATR%/波动率%/ADX/日均成交额/结论；分类筛选 + 跳转分析。
+  - `api.js` 新增 `runScreener()`。
+- **过程中修复的底层稳定性问题**（对全工具有益）：
+  1. `main.py` 启动加 `threaded=True`——原单线程，长请求会阻塞整个服务。
+  2. `data_service.py` 给 requests 注入 12s 默认超时——akshare 底层无超时，网络异常会无限卡死。
+  3. 批量评分放到**独立线程**执行——规避"在 werkzeug 请求线程里嵌套线程池"导致的死锁
+     （现象：直接跑 17s 完成，但在 Flask 请求里跑到第 8 个标的就卡死）。
+  4. `_ETF_NAME_MAP` 补充 LOF 名称（161226 白银LOF / 501018 南方原油LOF）。
+- **验证**：浏览器实测 49 只全部评分成功，耗时 ~12-15s，排序合理
+  （创业板/纳指/中证500 高分 98-99；国债/红利/银行被判"存在严重缺陷"）；缓存二次秒出。
+
+## 十三、其它本轮小改
+
+- **回测图表 tooltip 显示完整年份**：`BacktestCharts.jsx` 两张图（行情与交易、收益对比）
+  hover 文案由"月-日 时:分"改为"年-月-日 时:分"，避免跨年回测看不出年份。
+- **移除免责声明弹窗**：`shared/utils/disclaimer.js` 的 `checkDisclaimerStatus()` 直接返回 true
+  （本工具自用，不再每次进入弹"同意并继续"）。
+- **回测默认近半年**：`backtest_service.py` 未指定日期时默认最近 182 天。
+- **网格策略↔回测联动**：`AnalysisReport.jsx` 新增 `effectiveGrid`，回测中编辑的网格会同步到
+  "网格策略"标签显示（带自定义提示横幅）；切换标签不再丢失编辑参数（`backtestMounted` 保持挂载）。
+
+## 十四、待办
 
 - （可选）邮件发送报告(SMTP)功能尚未做。
+- （可选）港股 / 美股支持：当前数据层仅接通 A 股（含 ETF）；AkShare 有免费港美股接口，
+  需改 `_classify`、取数分支、交易日历、币种/最小交易单位等（用户已确认想加，暂未开工）。
 
-## 七、临时文件
+## 临时文件
 
-- 已清理 `backend\_probe.py` / `_probe_out.txt` / `_check*.py` 等。
+- 已清理 `backend\_probe.py` / `test_screen*.py` / `test_screener.py` / 各 `*_result.txt` 等。
