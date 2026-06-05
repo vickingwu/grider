@@ -14,7 +14,7 @@ import { useSortableData } from "@shared/hooks";
 import { SortableTh } from "@shared/components/ui";
 
 // 分类筛选选项
-const CATEGORIES = ["全部", "宽基指数", "行业主题", "跨境海外", "红利价值", "商品债券"];
+const CATEGORIES = ["全部", "宽基指数", "行业主题", "红利价值", "跨境海外", "商品能源"];
 
 // 结论对应的样式
 const conclusionStyle = (conclusion) => {

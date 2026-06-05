@@ -19,7 +19,7 @@ const DEFAULT_CODES = ["510300", "159915", "588000", "512170"];
 // 模块级名称缓存：跨组件实例 / 跨页面复用，避免重复请求
 const _nameCache = {};
 
-export default function CustomCodeList({ value, onSelect, label = "自定义标的：" }) {
+export default function CustomCodeList({ value, onSelect, label = "自定义标的" }) {
   const [codes, setCodes] = usePersistedState(STORAGE_KEY, DEFAULT_CODES);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");

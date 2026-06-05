@@ -17,13 +17,13 @@ export default function ETFSelector({
 }) {
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-3">
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+      <div className="mb-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
           <Search className="w-4 h-4" />
           标的选择
         </label>
 
-        {/* 自定义标的（可增删、点击填入） */}
+        {/* 自定义标的（可增删、点击填入），独占一行以容纳更多代码 */}
         <CustomCodeList value={value} onSelect={onChange} />
       </div>
 

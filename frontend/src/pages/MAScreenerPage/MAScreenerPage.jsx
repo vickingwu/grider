@@ -12,7 +12,7 @@ import { runMAScreener } from "@shared/services/api";
 import { useSortableData } from "@shared/hooks";
 import { SortableTh } from "@shared/components/ui";
 
-const CATEGORIES = ["全部", "宽基指数", "行业主题", "跨境海外", "红利价值", "商品债券"];
+const CATEGORIES = ["全部", "宽基指数", "行业主题", "红利价值", "跨境海外", "商品能源"];
 const PRESET_PERIODS = [5, 20, 50, 99, 128, 225];
 
 const pct = (v) => (typeof v === "number" ? (v * 100).toFixed(2) + "%" : "N/A");
