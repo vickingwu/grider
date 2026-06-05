@@ -10,6 +10,8 @@ import {
   Info,
 } from "lucide-react";
 import { runScreener } from "@shared/services/api";
+import { useSortableData } from "@shared/hooks";
+import { SortableTh } from "@shared/components/ui";
 
 // 分类筛选选项
 const CATEGORIES = ["全部", "宽基指数", "行业主题", "跨境海外", "红利价值", "商品债券"];
@@ -61,6 +63,11 @@ export default function ScreenerPage() {
     category === "全部"
       ? results
       : results.filter((r) => r.category === category);
+  // 默认按总分降序，表头可点击切换升/降序
+  const { sorted, sortKey, sortDir, requestSort } = useSortableData(filtered, {
+    key: "total_score",
+    dir: "desc",
+  });
 
   return (
     <>
@@ -175,17 +182,17 @@ export default function ScreenerPage() {
                     <th className="py-3 px-2">代码</th>
                     <th className="py-3 px-2">名称</th>
                     <th className="py-3 px-2">分类</th>
-                    <th className="py-3 px-2 text-right">总分</th>
-                    <th className="py-3 px-2 text-right">振幅ATR%</th>
-                    <th className="py-3 px-2 text-right">波动率%</th>
-                    <th className="py-3 px-2 text-right">ADX</th>
-                    <th className="py-3 px-2 text-right">日均成交额(万)</th>
-                    <th className="py-3 px-2">结论</th>
+                    <SortableTh label="总分" sortKey="total_score" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="振幅ATR%" sortKey="atr_pct" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="波动率%" sortKey="volatility_pct" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="ADX" sortKey="adx_value" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="日均成交额(万)" sortKey="avg_amount" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="结论" sortKey="total_score" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
                     <th className="py-3 px-2"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r, idx) => (
+                  {sorted.map((r, idx) => (
                     <tr
                       key={r.code + idx}
                       className="border-b border-gray-100 hover:bg-gray-50"
@@ -229,7 +236,7 @@ export default function ScreenerPage() {
                   ))}
                 </tbody>
               </table>
-              {filtered.length === 0 && (
+              {sorted.length === 0 && (
                 <p className="text-center text-gray-500 py-8">该分类下暂无标的</p>
               )}
             </div>

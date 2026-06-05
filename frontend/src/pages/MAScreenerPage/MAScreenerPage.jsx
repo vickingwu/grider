@@ -9,6 +9,8 @@ import {
   Info,
 } from "lucide-react";
 import { runMAScreener } from "@shared/services/api";
+import { useSortableData } from "@shared/hooks";
+import { SortableTh } from "@shared/components/ui";
 
 const CATEGORIES = ["全部", "宽基指数", "行业主题", "跨境海外", "红利价值", "商品债券"];
 const PRESET_PERIODS = [5, 20, 50, 99, 128, 225];
@@ -57,6 +59,11 @@ export default function MAScreenerPage() {
 
   const results = data?.results || [];
   const filtered = category === "全部" ? results : results.filter((r) => r.category === category);
+  // 默认按超额收益降序（与后端一致），表头可点击切换升/降序
+  const { sorted, sortKey, sortDir, requestSort } = useSortableData(filtered, {
+    key: "excess_return",
+    dir: "desc",
+  });
 
   return (
     <>
@@ -223,17 +230,17 @@ export default function MAScreenerPage() {
                     <th className="py-3 px-2">代码</th>
                     <th className="py-3 px-2">名称</th>
                     <th className="py-3 px-2">分类</th>
-                    <th className="py-3 px-2 text-right">超额收益</th>
-                    <th className="py-3 px-2 text-right">策略收益</th>
-                    <th className="py-3 px-2 text-right">持有收益</th>
-                    <th className="py-3 px-2 text-right">最大回撤</th>
-                    <th className="py-3 px-2 text-right">交易次数</th>
-                    <th className="py-3 px-2 text-right">胜率</th>
+                    <SortableTh label="超额收益" sortKey="excess_return" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="策略收益" sortKey="total_return" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="持有收益" sortKey="hold_return" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="最大回撤" sortKey="max_drawdown" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="交易次数" sortKey="total_trades" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="胜率" sortKey="win_rate" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
                     <th className="py-3 px-2"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r, idx) => (
+                  {sorted.map((r, idx) => (
                     <tr key={r.code + idx} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-3 px-2 text-gray-400">{idx + 1}</td>
                       <td className="py-3 px-2 font-medium text-gray-900">{r.code}</td>
@@ -267,7 +274,7 @@ export default function MAScreenerPage() {
                   ))}
                 </tbody>
               </table>
-              {filtered.length === 0 && <p className="text-center text-gray-500 py-8">该分类下暂无标的</p>}
+              {sorted.length === 0 && <p className="text-center text-gray-500 py-8">该分类下暂无标的</p>}
             </div>
           </div>
         )}
