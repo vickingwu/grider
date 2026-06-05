@@ -1,6 +1,6 @@
 # ETFer-Clone 项目进度存档
 
-> 最后更新：2026-06-05。新增「均线标的筛选器」；均线长周期预热修复。
+> 最后更新：2026-06-05。前复权(qfq) + 均线图修正 + 均线筛选器区间 + 筛选器排序。
 
 ## 一、项目概况
 
@@ -198,11 +198,32 @@
   - `MABacktestPage.jsx`：标的代码输入框下方加入 `<CustomCodeList>`。
 - **验证**：首页添加 512480 → 芯片+输入框+localStorage 均更新；切到均线回测页，自定义列表同步显示并可点击填入。
 
-## 十九、待办
+## 十九、筛选器表格排序（已完成）
+
+- **需求**：网格/均线筛选器表格支持点击表头切换升/降序。
+  - 均线：超额收益、策略收益、持有收益、最大回撤、交易次数、胜率
+  - 网格：总分、ATR%、波动率%、ADX、成交额、结论
+- **实现**：通用 Hook `shared/hooks/useSortableData.js`（点同列切换升降、点新列默认降序、null 始终在后）
+  + 通用表头组件 `shared/components/ui/SortableTh.jsx`（带 ↑/↓ 指示），两页共用，纯前端排序。
+- **验证**：网格按波动率降序(116→73→71)→升序(1.6→2.2→10.5)；均线按交易次数降序(26→25→24)。
+
+## 二十、前复权 + 均线图修正 + 均线筛选区间（已完成）
+
+- **#2 行情改前复权(qfq)**：`data_service._fetch_full_sina` 个股 `stock_zh_a_daily(adjust="qfq")`、
+  东财兜底个股/ETF 均 `adjust="qfq"`；缓存键加 `:qfq` 避免与旧的不复权数据混用。
+  消除分红送转价格跳变，与主流回测口径对齐（ETF 新浪接口不支持复权参数，保持原样）。
+- **#1 均线回测图 tooltip 日期/价格错位**：`MABacktestChart.jsx` 原以 "MM/DD" 作 X 轴 key，跨年同月日碰撞→tooltip 取错点；
+  日线还误带 15:00。改为以唯一完整日期作 key（X 轴 tickFormatter 显示 MM/DD），tooltip 显示纯日期。
+  验证：hover 显示 "2026/03/04 价格4.610 SMA20 4.702"，一致。
+- **#3 均线筛选器默认 2020-01-01 至今 + 可选区间**：`ma_screener_service`/`screener_routes` 透传 start/end，
+  缓存键含日期；前端 `MAScreenerPage` 加日期选择(默认2020至今)。
+  **耗时实测约 40s，与近半年版几乎相同**（数据层"全量下载一次+内存切片"，换区间不增网络请求）。
+
+## 二十一、待办
 
 - （可选）邮件发送报告(SMTP)功能尚未做。
 - （可选）港股 / 美股支持：当前数据层仅接通 A 股（含 ETF）；用户已确认想加，暂未开工。
 
 ## 临时文件
 
-- 已清理 `test_ma*.py` / `test_ma_screen*.py` / `test_screen*.py` / 各 `*_result.txt` / `*_direct.txt` 等。
+- 已清理 `test_ma*.py` / `test_ma_screen*.py` / `test_screen*.py` / `test_ma_screen_2020.py` / 各 `*_result.txt` / `*_direct.txt` / `ma2020.txt` 等。
