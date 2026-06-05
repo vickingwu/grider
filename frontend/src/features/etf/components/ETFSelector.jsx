@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Search, TrendingUp } from "lucide-react";
 import ETFInfoSkeleton from "./ETFInfoSkeleton";
+import CustomCodeList from "./CustomCodeList";
 
 /**
  * ETF选择器组件
- * 负责ETF代码输入、热门ETF选择、ETF信息展示
+ * 负责ETF代码输入、自定义标的选择、ETF信息展示
  */
 export default function ETFSelector({
   value,
@@ -14,20 +15,6 @@ export default function ETFSelector({
   etfInfo,
   loading,
 }) {
-  const hotETFs = ["510300", "159915", "588000", "512170", "3032" , "SPY"];
-
-  // 获取热门ETF列表
-  useEffect(() => {
-    fetch("/api/info/popular")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          // 这里可以设置popularETFs，但通过props传递更合适
-        }
-      })
-      .catch((err) => console.error("获取热门标的失败:", err));
-  }, []);
-
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-3">
@@ -36,29 +23,8 @@ export default function ETFSelector({
           标的选择
         </label>
 
-        {/* 热门ETF */}
-        <div className="flex items-center">
-          <span className="hidden sm:inline text-xs text-gray-500 mr-2">热门标的：</span>
-          <div className="flex flex-wrap gap-2">
-            {hotETFs.map((code) => {
-              const etf = popularETFs.find((e) => e.code === code);
-              return (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => onChange(code)}
-                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                    value === code
-                      ? "bg-blue-100 border-blue-300 text-blue-700"
-                      : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  {code} {etf?.name || ""}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* 自定义标的（可增删、点击填入） */}
+        <CustomCodeList value={value} onSelect={onChange} />
       </div>
 
       <div className="relative">

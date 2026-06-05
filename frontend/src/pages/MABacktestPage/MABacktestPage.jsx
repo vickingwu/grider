@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { runMABacktest } from "@shared/services/api";
 import MABacktestChart from "./MABacktestChart";
+import CustomCodeList from "@features/etf/components/CustomCodeList";
 
 // 常用均线周期
 const PRESET_PERIODS = [5, 20, 50, 99, 128, 225];
@@ -119,10 +120,14 @@ export default function MABacktestPage() {
               <label className="block text-sm text-gray-600 mb-1">标的代码</label>
               <input
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e) => setCode(e.target.value.replace(/[^0-9a-zA-Z]/g, "").toUpperCase())}
                 placeholder="如：510300、603137"
+                maxLength={6}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
               />
+              <div className="mt-2">
+                <CustomCodeList value={code} onSelect={setCode} />
+              </div>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">投资金额（元）</label>

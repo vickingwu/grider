@@ -1,6 +1,6 @@
 # ETFer-Clone 项目进度存档
 
-> 最后更新：2026-06-04。新增「均线策略回测」+「网格标的筛选器」，并修复若干问题。
+> 最后更新：2026-06-05。新增「均线标的筛选器」；均线长周期预热修复。
 
 ## 一、项目概况
 
@@ -161,12 +161,48 @@
 - **#4 市场环境分析/策略调整建议**：确认为**动态规则驱动**（波动率/ADX/网格数/资金利用率阈值触发），非写死，
   按用户要求保持现状（仅"ATR算法优势"4条科普文案是写死的，合理保留）。
 
-## 十六、待办
+## 十六、均线长周期预热修复 + 日期默认值（已完成）
+
+- **问题1**：均线回测页日期控件默认空白，用户不知道默认区间是近半年。
+  - 修复：`MABacktestPage.jsx` 初始化 startDate/endDate 为最近 182 天（已预填、可改）。
+- **问题2**：选 128/225 日均线报 400（默认近半年只有 ~120 根日线，不够算长周期均线）。
+  - 根因：之前 `period >= len(kline_data)` 直接报错。
+  - 修复（行业标准"均线预热"）：`run_ma_backtest` 在回测开始日**之前额外多取 `period+5` 个交易日**
+    （`_shift_trading_days_back` 算预热起点），这段只喂均线、不参与买卖/收益统计；
+    `MABacktestEngine.run(trade_start_index=...)` 支持预热段；`_format_ma_result` 把均线序列切片到回测窗口。
+  - 验证：近半年区间 + SMA225 → HTTP200、5笔、均线全程有值；SMA128 → 9笔；SMA20 → 17笔。
+
+## 十七、均线标的筛选器（已完成）
+
+- **目标**：类比网格筛选器，对相同 50 只 ETF 快速挑出适合均线交易的标的。
+- **方案**（用户确认 A3+B）：页面顶部选**均线类型(SMA/EMA)+周期(5/20/50/99/128/225/自定义)**，
+  全部用同一参数回测；默认按**超额收益(策略−持有)**降序排序。
+- **后端**：
+  - 新增 `services/ma_screener_service.py`：复用网格筛选器的"独立后台线程 + 缓存"架构，
+    每只标的调 `BacktestService.run_ma_backtest` 评分；缓存按"类型+周期+资金+仓位"分键。
+  - `routes/screener_routes.py` 新增 `GET /api/screener/ma`（period/maType/capital/positionRatio/refresh）。
+- **前端**：新页面 `pages/MAScreenerPage/`，路由 `/ma-screener`，首页入口按钮；
+  表格列：超额/策略/持有/回撤/交易次数/胜率 + 分类筛选 + 跳详细回测；`api.js` 新增 `runMAScreener()`。
+- **关键修复（重要）**：发现真正的崩溃根因——akshare 依赖的 **`py_mini_racer`(V8 引擎) 非线程安全**，
+  并发跑回测会触发 `IsConfigurablePoolInitialized()` V8 多线程初始化崩溃（此前网格筛选/回测偶发卡死同源）。
+  → 均线筛选器改为**串行执行**(`_MAX_WORKERS=1`，仍在独立线程内，避免阻塞 werkzeug)，稳定可靠。
+- **验证**：浏览器实测 SMA20 → 49/49 成功、耗时 ~42s、白银LOF +37% 超额居首，排序合理；缓存二次秒出。
+
+## 十八、自定义标的列表（替换热门标的，已完成）
+
+- **需求**：网格(首页)与均线回测页把固定"热门标的"改为**用户自定义代码列表**——可添加代码、点击填入输入框、可删除。
+- **实现**：
+  - 新增通用组件 `features/etf/components/CustomCodeList.jsx`：用 `usePersistedState` 存 localStorage(`customCodeList`)，
+    芯片式展示，支持「添加」(输入+回车)、点击填入(onSelect)、删除(×)；首页与均线页**共享同一份列表**。
+  - `ETFSelector.jsx`：移除写死的 `hotETFs` 与 `/api/info/popular` 拉取，改用 `<CustomCodeList>`。
+  - `MABacktestPage.jsx`：标的代码输入框下方加入 `<CustomCodeList>`。
+- **验证**：首页添加 512480 → 芯片+输入框+localStorage 均更新；切到均线回测页，自定义列表同步显示并可点击填入。
+
+## 十九、待办
 
 - （可选）邮件发送报告(SMTP)功能尚未做。
-- （可选）港股 / 美股支持：当前数据层仅接通 A 股（含 ETF）；AkShare 有免费港美股接口，
-  需改 `_classify`、取数分支、交易日历、币种/最小交易单位等（用户已确认想加，暂未开工）。
+- （可选）港股 / 美股支持：当前数据层仅接通 A 股（含 ETF）；用户已确认想加，暂未开工。
 
 ## 临时文件
 
-- 已清理 `backend\_probe.py` / `test_screen*.py` / `test_ma.py` / `test_screener.py` / 各 `*_result.txt` 等。
+- 已清理 `test_ma*.py` / `test_ma_screen*.py` / `test_screen*.py` / 各 `*_result.txt` / `*_direct.txt` 等。
