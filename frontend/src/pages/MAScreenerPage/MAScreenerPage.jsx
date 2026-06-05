@@ -290,7 +290,7 @@ export default function MAScreenerPage() {
                       )}
                       <td className="py-3 px-2">
                         <Link
-                          to="/ma-backtest"
+                          to={`/ma-backtest?code=${r.code}`}
                           className="text-indigo-600 hover:text-indigo-700 text-xs whitespace-nowrap"
                         >
                           详细回测
