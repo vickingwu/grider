@@ -128,9 +128,6 @@ export default function MABacktestPage() {
                 maxLength={6}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
               />
-              <div className="mt-2">
-                <CustomCodeList value={code} onSelect={setCode} />
-              </div>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">投资金额（元）</label>
@@ -143,6 +140,9 @@ export default function MABacktestPage() {
               />
             </div>
           </div>
+
+          {/* 自定义标的（独占整行，容纳更多代码再换行） */}
+          <CustomCodeList value={code} onSelect={setCode} />
 
           {/* 均线类型 */}
           <div>
