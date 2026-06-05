@@ -161,7 +161,7 @@ def run_ma_backtest():
     {
         "etfCode": "510300",
         "totalCapital": 100000,
-        "maParams": { "period": 20, "maType": "SMA", "positionRatio": 1.0 },
+        "maParams": { "period": 20, "maType": "SMA" },
         "backtestConfig": {...},     // 可选
         "startDate": "2024-01-01",   // 可选
         "endDate": "2024-12-31"      // 可选
@@ -190,7 +190,6 @@ def run_ma_backtest():
         ma_params = {
             'period': int(ma_in.get('period', 20)),
             'ma_type': ma_in.get('maType', 'SMA'),
-            'position_ratio': float(ma_in.get('positionRatio', 1.0)),
         }
         if ma_params['period'] < 2 or ma_params['period'] > 500:
             return jsonify({'success': False, 'error': '均线周期应在2-500之间'}), HTTP_BAD_REQUEST

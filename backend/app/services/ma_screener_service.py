@@ -25,7 +25,7 @@ _MA_SCREENER_CACHE_TTL = 3600
 
 
 def _evaluate_one(item: Dict, period: int, ma_type: str,
-                  total_capital: float, position_ratio: float,
+                  total_capital: float,
                   start_date: str = "", end_date: str = "") -> Dict:
     """对单只标的跑均线回测，返回精简评分（失败带 error）。"""
     code = str(item.get("code", "")).strip()
@@ -42,7 +42,7 @@ def _evaluate_one(item: Dict, period: int, ma_type: str,
         result = bt.run_ma_backtest(
             etf_code=processed_code,
             exchange_code=exchange_code,
-            ma_params={"period": period, "ma_type": ma_type, "position_ratio": position_ratio},
+            ma_params={"period": period, "ma_type": ma_type},
             total_capital=total_capital,
             type=sec_type,
             country=country,
@@ -64,6 +64,7 @@ def _evaluate_one(item: Dict, period: int, ma_type: str,
             "max_drawdown": pm["max_drawdown"],
             "sharpe_ratio": pm["sharpe_ratio"],
             "total_trades": tm["total_trades"],
+            "round_trips": tm.get("sell_trades", 0),  # 往返次数（每次卖出=一次完整买卖）
             "win_rate": tm["win_rate"],
             "error": None,
         }
@@ -90,10 +91,10 @@ class MAScreenerService:
     """批量均线回测筛选服务（同步 + 缓存）"""
 
     def screen(self, candidates: List[Dict], period: int = 20, ma_type: str = "SMA",
-               total_capital: float = 100000, position_ratio: float = 1.0,
+               total_capital: float = 100000,
                start_date: str = "", end_date: str = "",
                force_refresh: bool = False) -> Dict:
-        cache_key = f"ma_screener:{ma_type}:{period}:{int(total_capital)}:{position_ratio}:{start_date}:{end_date}"
+        cache_key = f"ma_screener:{ma_type}:{period}:{int(total_capital)}:{start_date}:{end_date}"
         if not force_refresh:
             cached = _cache_get(cache_key)
             if cached is not None:
@@ -105,7 +106,7 @@ class MAScreenerService:
 
         def _worker():
             holder["payload"] = self._do_screen(
-                candidates, cache_key, period, ma_type, total_capital, position_ratio,
+                candidates, cache_key, period, ma_type, total_capital,
                 start_date, end_date
             )
 
@@ -119,14 +120,14 @@ class MAScreenerService:
         }
 
     def _do_screen(self, candidates: List[Dict], cache_key: str, period: int,
-                   ma_type: str, total_capital: float, position_ratio: float,
+                   ma_type: str, total_capital: float,
                    start_date: str = "", end_date: str = "") -> Dict:
         start = time.time()
         results: List[Dict] = []
         with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
             future_map = {
                 executor.submit(_evaluate_one, item, period, ma_type, total_capital,
-                                position_ratio, start_date, end_date): item
+                                start_date, end_date): item
                 for item in candidates
             }
             for future in as_completed(future_map):
@@ -141,7 +142,7 @@ class MAScreenerService:
             "total": len(results),
             "succeeded": succeeded,
             "failed": len(results) - succeeded,
-            "ma_config": {"period": period, "ma_type": ma_type, "position_ratio": position_ratio},
+            "ma_config": {"period": period, "ma_type": ma_type},
             "date_range": {"start_date": start_date or None, "end_date": end_date or None},
             "elapsed_seconds": elapsed,
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),

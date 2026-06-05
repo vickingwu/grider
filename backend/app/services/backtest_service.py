@@ -166,7 +166,7 @@ class BacktestService:
         """执行均线策略回测（趋势跟随：价格上穿均线买入、下穿清仓）。
 
         Args:
-            ma_params: {period, ma_type('SMA'|'EMA'), position_ratio(0-1)}
+            ma_params: {period, ma_type('SMA'|'EMA')}（单均线全进全出，固定满仓）
             total_capital: 总资金
             start_date_in / end_date_in: 可选自定义日期（YYYY-MM-DD）
         """
@@ -216,7 +216,7 @@ class BacktestService:
                 commission_rate=config.commission_rate,
                 min_commission=config.min_commission,
             )
-            engine = MABacktestEngine(ma_params, fee_calc, total_capital, country=country)
+            engine = MABacktestEngine(ma_params, fee_calc, total_capital, country=country, sec_type=type)
             backtest_result = engine.run(kline_all, trade_start_index=trade_start_index)
 
             # 仅用回测段（窗口）计算指标与价格基准
@@ -337,7 +337,6 @@ class BacktestService:
             'ma_config': {
                 'period': int(ma_params.get('period', 20)),
                 'ma_type': ma_params.get('ma_type', 'SMA'),
-                'position_ratio': float(ma_params.get('position_ratio', 1.0)),
             },
             'backtest_period': {
                 'start_date': start_date,

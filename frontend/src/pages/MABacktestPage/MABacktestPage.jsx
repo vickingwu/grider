@@ -31,7 +31,6 @@ export default function MABacktestPage() {
   const [period, setPeriod] = useState(20);
   const [customPeriod, setCustomPeriod] = useState("");
   const [useCustom, setUseCustom] = useState(false);
-  const [positionRatio, setPositionRatio] = useState(100); // 百分比
   const [startDate, setStartDate] = useState(DEFAULT_START);
   const [endDate, setEndDate] = useState(DEFAULT_END);
 
@@ -60,7 +59,6 @@ export default function MABacktestPage() {
         maParams: {
           period: effectivePeriod,
           maType,
-          positionRatio: Number(positionRatio) / 100,
         },
         startDate: startDate || undefined,
         endDate: endDate || undefined,
@@ -71,7 +69,7 @@ export default function MABacktestPage() {
     } finally {
       setLoading(false);
     }
-  }, [code, capital, maType, effectivePeriod, positionRatio, startDate, endDate]);
+  }, [code, capital, maType, effectivePeriod, startDate, endDate]);
 
   const m = result?.performance_metrics;
   const tm = result?.trading_metrics;
@@ -210,23 +208,6 @@ export default function MABacktestPage() {
             </div>
           </div>
 
-          {/* 仓位比例 */}
-          <div>
-            <label className="block text-sm text-gray-600 mb-2">
-              买入仓位比例：<span className="font-medium text-gray-900">{positionRatio}%</span>
-            </label>
-            <input
-              type="range"
-              min="10"
-              max="100"
-              step="10"
-              value={positionRatio}
-              onChange={(e) => setPositionRatio(e.target.value)}
-              className="w-full md:w-1/2"
-            />
-            <p className="text-xs text-gray-500 mt-1">每次金叉买入时投入可用资金的比例，默认满仓 100%</p>
-          </div>
-
           {/* 回测区间（可选） */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -277,7 +258,7 @@ export default function MABacktestPage() {
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <h2 className="font-semibold text-gray-900">
                   {result.etf_info?.name}（{result.etf_info?.code}） · {result.ma_config?.ma_type}
-                  {result.ma_config?.period}日均线 · 仓位{Math.round((result.ma_config?.position_ratio || 1) * 100)}%
+                  {result.ma_config?.period}日均线
                 </h2>
                 <span className="text-sm text-gray-500">
                   {result.backtest_period?.start_date} ~ {result.backtest_period?.end_date}
@@ -291,7 +272,7 @@ export default function MABacktestPage() {
                 <Metric label="年化收益" value={pct(m?.annualized_return)} positive={m?.annualized_return} />
                 <Metric label="最大回撤" value={pct(m?.max_drawdown)} positive={0} />
                 <Metric label="夏普比率" value={m?.sharpe_ratio != null ? m.sharpe_ratio.toFixed(2) : "N/A"} />
-                <Metric label="交易次数" value={`${tm?.total_trades}（买${tm?.buy_trades}/卖${tm?.sell_trades}）`} />
+                <Metric label="交易次数" value={`${tm?.sell_trades ?? 0} 次（买${tm?.buy_trades}/卖${tm?.sell_trades}）`} />
                 <Metric label="胜率" value={pct(tm?.win_rate)} />
               </div>
             </div>

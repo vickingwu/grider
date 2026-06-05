@@ -38,28 +38,31 @@ class MABacktestEngine:
     """均线策略回测引擎"""
 
     def __init__(self, ma_params: dict, fee_calculator: FeeCalculator,
-                 total_capital: float, country: str = "CHN"):
+                 total_capital: float, country: str = "CHN", sec_type: str = "ETF"):
         """
         Args:
             ma_params: {
                 'period': int,           # 均线周期
                 'ma_type': 'SMA'|'EMA',  # 均线类型
-                'position_ratio': float, # 买入仓位比例 0-1（默认1.0满仓）
             }
             fee_calculator: 手续费计算器
             total_capital: 总资金
             country: 市场（决定最小交易单位）
+
+        策略：单均线全进全出——收盘价上穿均线满仓买入，下穿均线全部清仓。
+        （单均线"价格 vs 均线"模型只在持有/空仓间切换，故固定满仓，无仓位比例参数。）
         """
         self.period = int(ma_params.get("period", 20))
         self.ma_type = ma_params.get("ma_type", "SMA")
-        self.position_ratio = float(ma_params.get("position_ratio", 1.0))
-        if self.position_ratio <= 0 or self.position_ratio > 1:
-            self.position_ratio = 1.0
         self.fee_calc = fee_calculator
         self.total_capital = total_capital
         self.country = country
-        # 最小交易单位：A股/港股按手(100股)，美股 1 股
-        self.min_unit = 1 if country == "USA" else 100
+        self.sec_type = sec_type
+        # 最小交易单位：指数(INDEX)无"手"概念按1；美股按1股；A股/港股ETF/个股按100股(1手)
+        if sec_type == "INDEX" or country == "USA":
+            self.min_unit = 1
+        else:
+            self.min_unit = 100
 
         self.trade_records: List[TradeRecord] = []
         self.equity_curve: List[Dict] = []
@@ -142,9 +145,8 @@ class MABacktestEngine:
         }
 
     def _buy(self, kbar: KBar, price: float, cash: float, position: int):
-        """按可用资金 * 仓位比例买入（向最小单位取整）。"""
-        invest = cash * self.position_ratio
-        raw_qty = int(invest / price) if price > 0 else 0
+        """满仓买入（用全部可用现金，向最小单位取整）。"""
+        raw_qty = int(cash / price) if price > 0 else 0
         qty = self._round_quantity(raw_qty)
         if qty <= 0:
             return cash, position

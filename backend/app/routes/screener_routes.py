@@ -48,7 +48,6 @@ def run_ma_screener():
       period: 均线周期（默认20）
       maType: SMA|EMA（默认SMA）
       capital: 投资金额（默认100000）
-      positionRatio: 仓位比例 0-1（默认1.0）
       refresh: 1 强制重算
     """
     try:
@@ -66,17 +65,13 @@ def run_ma_screener():
             capital = float(request.args.get('capital', 100000))
         except (TypeError, ValueError):
             capital = 100000.0
-        try:
-            position_ratio = float(request.args.get('positionRatio', 1.0))
-        except (TypeError, ValueError):
-            position_ratio = 1.0
 
         force = request.args.get('refresh') in ('1', 'true', 'yes')
         start_date = (request.args.get('startDate', '') or '').strip()
         end_date = (request.args.get('endDate', '') or '').strip()
         payload = _ma_service.screen(
             SCREENER_CANDIDATES, period=period, ma_type=ma_type,
-            total_capital=capital, position_ratio=position_ratio,
+            total_capital=capital,
             start_date=start_date, end_date=end_date, force_refresh=force,
         )
         return jsonify({'success': True, 'data': payload}), HTTP_OK
