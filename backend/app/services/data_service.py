@@ -140,6 +140,39 @@ def _sina_symbol(code: str, exchange: str) -> str:
     return f"{prefix}{code}"
 
 
+# 内置指数代码表：code -> (sina_symbol, name)
+# 指数代码与深市个股(000xxx)会冲突，故用白名单精确识别常见宽基/主题指数。
+_INDEX_MAP = {
+    "000688": ("sh000688", "科创50指数"),
+    "000300": ("sh000300", "沪深300指数"),
+    "000905": ("sh000905", "中证500指数"),
+    "000852": ("sh000852", "中证1000指数"),
+    "000016": ("sh000016", "上证50指数"),
+    "000001": ("sh000001", "上证指数"),
+    "000922": ("sh000922", "中证红利指数"),
+    "000985": ("sh000985", "中证全指"),
+    "000010": ("sh000010", "上证180指数"),
+    "399001": ("sz399001", "深证成指"),
+    "399006": ("sz399006", "创业板指"),
+    "399005": ("sz399005", "中小板指"),
+    "399300": ("sz399300", "沪深300指数(深)"),
+    "399673": ("sz399673", "创业板50指数"),
+    "932000": ("sh932000", "中证2000指数"),
+}
+
+
+def _is_index(code: str) -> bool:
+    return str(code).strip() in _INDEX_MAP
+
+
+def _index_sina_symbol(code: str) -> str:
+    return _INDEX_MAP[str(code).strip()][0]
+
+
+def _index_name(code: str) -> str:
+    return _INDEX_MAP[str(code).strip()][1]
+
+
 def _get_etf_name_table() -> dict:
     """新浪 ETF 分类表 code(纯数字)->name，带内存+磁盘长缓存。"""
     cache_key = "table:etf_names"
@@ -253,6 +286,17 @@ class DataService:
         """搜索标的，返回 {code, name, exchange_code, type}。"""
         try:
             code = str(ticker).strip()
+            # 指数优先识别（白名单），避免与深市个股 000xxx 冲突
+            if _is_index(code):
+                sym = _index_sina_symbol(code)
+                exchange = "XSHG" if sym.startswith("sh") else "XSHE"
+                return {
+                    "code": code,
+                    "name": _index_name(code),
+                    "exchange_code": exchange,
+                    "type": "INDEX",
+                    "management": "",
+                }
             is_etf, exchange = _classify(code, country_code)
             sec_type = "ETF" if is_etf else "STOCK"
             name = self._lookup_name(code, is_etf)
@@ -398,7 +442,7 @@ class DataService:
         df = self._fetch_full_sina(code, sec_type)
 
         # 兜底源：东方财富(eastmoney) — 取近 ~13 年覆盖常见需求
-        if df is None or len(df) == 0:
+        if (df is None or len(df) == 0) and sec_type != "INDEX":
             try:
                 start_compact = "20130101"
                 end_compact = datetime.now().strftime("%Y%m%d")
@@ -414,6 +458,16 @@ class DataService:
                     df = _normalize_daily(raw)
             except Exception as e:  # noqa: BLE001
                 logger.warning(f"东方财富全量历史兜底也失败: {code}, {e}")
+        # 指数兜底：东财指数接口
+        elif (df is None or len(df) == 0) and sec_type == "INDEX":
+            try:
+                raw = _retry(ak.index_zh_a_hist, symbol=code, period="daily",
+                             start_date="20100101", end_date=datetime.now().strftime("%Y%m%d"),
+                             retries=2, delay=1.0)
+                if raw is not None and len(raw):
+                    df = _normalize_daily(raw)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"东方财富指数兜底也失败: {code}, {e}")
 
         if df is None or len(df) == 0:
             return None
@@ -427,8 +481,22 @@ class DataService:
 
         个股使用前复权(qfq)，消除分红送转导致的价格跳变（与主流回测口径一致）。
         ETF 的新浪接口不支持复权参数，保持原样（ETF 复权影响很小）。
+        指数(INDEX)使用 stock_zh_index_daily。
         """
         try:
+            # 指数：使用指数日线接口
+            if sec_type == "INDEX" and _is_index(code):
+                sym = _index_sina_symbol(code)
+                raw = _retry(ak.stock_zh_index_daily, symbol=sym, retries=3, delay=1.5)
+                if raw is None or len(raw) == 0:
+                    return None
+                df = raw[["date", "open", "high", "low", "close", "volume"]].copy()
+                df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+                for col in ["open", "high", "low", "close", "volume"]:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+                df["amount"] = ((df["open"] + df["close"] + df["high"] + df["low"]) / 4) * df["volume"]
+                return df.reset_index(drop=True)
+
             _, exchange = _classify(code)
             sym = _sina_symbol(code, exchange)
             if sec_type == "ETF":
