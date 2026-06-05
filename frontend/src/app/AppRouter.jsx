@@ -8,6 +8,7 @@ import HomePage from "@pages/HomePage";
 import AnalysisPage from "@pages/AnalysisPage";
 import ScreenerPage from "@pages/ScreenerPage";
 import MABacktestPage from "@pages/MABacktestPage";
+import MAScreenerPage from "@pages/MAScreenerPage";
 
 /**
  * 应用路由配置组件
@@ -20,6 +21,7 @@ export default function AppRouter() {
         <Route path="/" element={<HomePage />} />
         <Route path="/screener" element={<ScreenerPage />} />
         <Route path="/ma-backtest" element={<MABacktestPage />} />
+        <Route path="/ma-screener" element={<MAScreenerPage />} />
         <Route path="/analysis/:etfCode" element={<AnalysisPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

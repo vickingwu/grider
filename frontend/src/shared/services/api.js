@@ -101,6 +101,20 @@ class ApiService {
   }
 
   /**
+   * 运行均线标的筛选器（对候选池用同一均线参数批量回测，按超额收益排序）
+   * @param {object} opts - { period, maType, capital, positionRatio, refresh }
+   */
+  async runMAScreener(opts = {}) {
+    const params = {};
+    if (opts.period != null) params.period = opts.period;
+    if (opts.maType) params.maType = opts.maType;
+    if (opts.capital != null) params.capital = opts.capital;
+    if (opts.positionRatio != null) params.positionRatio = opts.positionRatio;
+    if (opts.refresh) params.refresh = 1;
+    return this.get("/screener/ma", params);
+  }
+
+  /**
    * 健康检查
    */
   async healthCheck() {
@@ -147,6 +161,7 @@ export const getETFInfo = (etfCode) => apiService.getETFInfo(etfCode);
 export const getPopularETFs = () => apiService.getPopularETFs();
 export const runScreener = (forceRefresh) => apiService.runScreener(forceRefresh);
 export const runMABacktest = (params) => apiService.runMABacktest(params);
+export const runMAScreener = (opts) => apiService.runMAScreener(opts);
 export const healthCheck = () => apiService.healthCheck();
 export const getVersion = () => apiService.getVersion();
 export const runBacktest = (etfCode, exchangeCode, gridStrategy, backtestConfig, type, customGridParams) =>
