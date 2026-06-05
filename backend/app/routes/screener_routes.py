@@ -72,9 +72,12 @@ def run_ma_screener():
             position_ratio = 1.0
 
         force = request.args.get('refresh') in ('1', 'true', 'yes')
+        start_date = (request.args.get('startDate', '') or '').strip()
+        end_date = (request.args.get('endDate', '') or '').strip()
         payload = _ma_service.screen(
             SCREENER_CANDIDATES, period=period, ma_type=ma_type,
-            total_capital=capital, position_ratio=position_ratio, force_refresh=force,
+            total_capital=capital, position_ratio=position_ratio,
+            start_date=start_date, end_date=end_date, force_refresh=force,
         )
         return jsonify({'success': True, 'data': payload}), HTTP_OK
     except Exception as e:

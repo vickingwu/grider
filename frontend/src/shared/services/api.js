@@ -110,6 +110,8 @@ class ApiService {
     if (opts.maType) params.maType = opts.maType;
     if (opts.capital != null) params.capital = opts.capital;
     if (opts.positionRatio != null) params.positionRatio = opts.positionRatio;
+    if (opts.startDate) params.startDate = opts.startDate;
+    if (opts.endDate) params.endDate = opts.endDate;
     if (opts.refresh) params.refresh = 1;
     return this.get("/screener/ma", params);
   }

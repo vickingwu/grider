@@ -18,11 +18,18 @@ const PRESET_PERIODS = [5, 20, 50, 99, 128, 225];
 const pct = (v) => (typeof v === "number" ? (v * 100).toFixed(2) + "%" : "N/A");
 const signColor = (v) => (typeof v === "number" ? (v > 0 ? "text-up-600" : v < 0 ? "text-down-600" : "text-gray-700") : "text-gray-400");
 
+// 默认回测区间：2020-01-01 至今
+const toYMD = (d) => d.toISOString().slice(0, 10);
+const DEFAULT_START = "2020-01-01";
+const DEFAULT_END = toYMD(new Date());
+
 export default function MAScreenerPage() {
   const [maType, setMaType] = useState("SMA");
   const [period, setPeriod] = useState(20);
   const [customPeriod, setCustomPeriod] = useState("");
   const [useCustom, setUseCustom] = useState(false);
+  const [startDate, setStartDate] = useState(DEFAULT_START);
+  const [endDate, setEndDate] = useState(DEFAULT_END);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -45,6 +52,8 @@ export default function MAScreenerPage() {
         const resp = await runMAScreener({
           period: effectivePeriod,
           maType,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
           refresh: forceRefresh,
         });
         setData(resp.data);
@@ -54,7 +63,7 @@ export default function MAScreenerPage() {
         setLoading(false);
       }
     },
-    [effectivePeriod, maType]
+    [effectivePeriod, maType, startDate, endDate]
   );
 
   const results = data?.results || [];
@@ -157,6 +166,23 @@ export default function MAScreenerPage() {
                   className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
                 />
               )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-gray-600 w-16">回测区间</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+              />
+              <span className="text-gray-400 text-sm">至</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+              />
+              <span className="text-xs text-gray-400">默认 2020-01-01 至今</span>
             </div>
           </div>
 

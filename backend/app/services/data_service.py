@@ -389,7 +389,7 @@ class DataService:
         新浪接口本身返回全量历史，这里只下载一次、长缓存，后续按区间在内存切片，
         从而消除单次分析中的重复网络请求（最新价/历史/回测共用同一份数据）。
         """
-        cache_key = f"full:{sec_type}:{code}"
+        cache_key = f"full:qfq:{sec_type}:{code}"
         cached = _cache_get(cache_key)
         if cached is not None:
             return cached
@@ -404,11 +404,11 @@ class DataService:
                 end_compact = datetime.now().strftime("%Y%m%d")
                 if sec_type == "ETF":
                     raw = _retry(ak.fund_etf_hist_em, symbol=code, period="daily",
-                                 start_date=start_compact, end_date=end_compact, adjust="",
+                                 start_date=start_compact, end_date=end_compact, adjust="qfq",
                                  retries=2, delay=1.0)
                 else:
                     raw = _retry(ak.stock_zh_a_hist, symbol=code, period="daily",
-                                 start_date=start_compact, end_date=end_compact, adjust="",
+                                 start_date=start_compact, end_date=end_compact, adjust="qfq",
                                  retries=2, delay=1.0)
                 if raw is not None and len(raw):
                     df = _normalize_daily(raw)
@@ -423,14 +423,18 @@ class DataService:
         return df
 
     def _fetch_full_sina(self, code: str, sec_type: str) -> Optional[pd.DataFrame]:
-        """新浪全量日线，统一字段（不做区间过滤）。"""
+        """新浪全量日线，统一字段（不做区间过滤）。
+
+        个股使用前复权(qfq)，消除分红送转导致的价格跳变（与主流回测口径一致）。
+        ETF 的新浪接口不支持复权参数，保持原样（ETF 复权影响很小）。
+        """
         try:
             _, exchange = _classify(code)
             sym = _sina_symbol(code, exchange)
             if sec_type == "ETF":
                 raw = _retry(ak.fund_etf_hist_sina, symbol=sym, retries=3, delay=1.5)
             else:
-                raw = _retry(ak.stock_zh_a_daily, symbol=sym, retries=3, delay=1.5)
+                raw = _retry(ak.stock_zh_a_daily, symbol=sym, adjust="qfq", retries=3, delay=1.5)
             if raw is None or len(raw) == 0:
                 return None
             raw = raw.rename(columns={

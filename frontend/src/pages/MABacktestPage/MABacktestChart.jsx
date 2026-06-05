@@ -33,19 +33,20 @@ export default function MABacktestChart({ priceCurve = [], maCurve = [], tradeRe
     });
 
     const merged = priceCurve.map((bar) => {
-      const fullTime = new Date(bar.time).toLocaleString("zh-CN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      const shortTime = new Date(bar.time).toLocaleString("zh-CN", {
-        month: "2-digit",
-        day: "2-digit",
-      });
+      const dt = new Date(bar.time);
+      // 日线回测：时间戳为当日 15:00，分钟无意义，tooltip 只显示到「日」
+      const isDailyClose = dt.getHours() === 15 && dt.getMinutes() === 0;
+      const fullTime = isDailyClose
+        ? dt.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" })
+        : dt.toLocaleString("zh-CN", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
       return {
-        time: shortTime,
+        time: dt.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }),
         fullTime,
         close: bar.close,
         ma: maMap.get(bar.time) ?? null,
@@ -60,7 +61,12 @@ export default function MABacktestChart({ priceCurve = [], maCurve = [], tradeRe
     <ResponsiveContainer width="100%" height={420}>
       <ComposedChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-        <XAxis dataKey="time" tick={{ fontSize: 12 }} interval="preserveStartEnd" />
+        <XAxis
+          dataKey="time"
+          tick={{ fontSize: 12 }}
+          interval="preserveStartEnd"
+          tickFormatter={(v) => (typeof v === "string" ? v.slice(5) : v)}
+        />
         <YAxis
           domain={["dataMin - 0.1", "dataMax + 0.1"]}
           tick={{ fontSize: 12 }}
