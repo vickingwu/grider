@@ -12,7 +12,7 @@ import MABacktestChart from "./MABacktestChart";
 import CustomCodeList from "@features/etf/components/CustomCodeList";
 
 // 常用均线周期
-const PRESET_PERIODS = [5, 20, 50, 99, 128, 225];
+const PRESET_PERIODS = [5, 15, 20, 50, 99, 128, 225];
 
 const pct = (v) => (typeof v === "number" ? (v * 100).toFixed(2) + "%" : "N/A");
 

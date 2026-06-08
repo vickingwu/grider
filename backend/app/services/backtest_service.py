@@ -212,10 +212,21 @@ class BacktestService:
                     raise ValueError(f"数据不足以回测{period}日均线，请缩短周期或选更长区间")
 
             # 执行均线回测（带预热）
-            fee_calc = FeeCalculator(
-                commission_rate=config.commission_rate,
-                min_commission=config.min_commission,
-            )
+            # 手续费按证券类型区分：指数免佣；ETF 去掉最低5元(仅按费率)；个股保留最低5元
+            if type == 'INDEX':
+                fee_calc = FeeCalculator(commission_rate=0.0, min_commission=0.0, apply_min=False)
+            elif type == 'ETF':
+                fee_calc = FeeCalculator(
+                    commission_rate=config.commission_rate,
+                    min_commission=config.min_commission,
+                    apply_min=False,
+                )
+            else:  # STOCK
+                fee_calc = FeeCalculator(
+                    commission_rate=config.commission_rate,
+                    min_commission=config.min_commission,
+                    apply_min=True,
+                )
             engine = MABacktestEngine(ma_params, fee_calc, total_capital, country=country, sec_type=type)
             backtest_result = engine.run(kline_all, trade_start_index=trade_start_index)
 
