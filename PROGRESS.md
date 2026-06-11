@@ -1,6 +1,22 @@
 # ETFer-Clone 项目进度存档
 
-> 最后更新：2026-06-05。与博主对齐调查(不跳首笔) + 手续费按类型 + 15日预设。
+> 最后更新：2026-06-11。网格自定义参数3大bug修复 + 适宜度改为基于回测(方案A) + start.bat健壮化。
+
+## 最新一轮改动（2026-06-11，已验证）
+
+**网格回测 3 个 bug 修复：**
+1. 等比步长单位换算：自定义"15%"曾被二次缩放成0.75%，已修正为真15%；`geometric_grid.py` 步长上限 10%→50%。
+2. 单笔数量字段统一：`calculate_fund_allocation_v2` 新增 `forced_single_quantity`，用户指定时不再被优化器反推值覆盖；`grid_config` 与 `fund_allocation` 两处一致。
+3. 底仓按真实单笔数量重算（修2后自然带出）。
+
+**适宜度评估改为方案A（基于回测实测）：**
+- 新增 `backend/app/services/backtest_suitability.py`：四维度=超额收益(40)+策略收益(25)+回撤控制(20)+交易活跃度(15)。
+- `run_backtest` 返回附加 `suitability_evaluation`(based_on="backtest")。
+- 前端 `BacktestTab` 上报 → `AnalysisReport` 让 概览/适宜度/回测分析 三tab同源；`SuitabilityCard` 按来源自适应标题与评分标准。
+
+**本地启动：** `start.bat` 多路径查找 Python（python→py→%LOCALAPPDATA%\Python\bin），不再依赖系统 PATH；修复报错分支中文行被当命令执行的问题。
+
+---
 
 ## 一、项目概况
 

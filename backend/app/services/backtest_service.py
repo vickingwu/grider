@@ -447,7 +447,8 @@ class BacktestService:
                 )
 
             fund_allocation = optimizer.calculate_fund_allocation_v2(
-                total_capital, price_levels, start_price
+                total_capital, price_levels, start_price,
+                forced_single_quantity=grid_config.get('single_trade_quantity')
             )
 
             grid_strategy['current_price'] = round(start_price, 3)
@@ -484,23 +485,36 @@ class BacktestService:
         grid_type = grid_strategy.get('grid_config', {}).get('type', '等差')
         if grid_type == '等差':
             # 等差网格：grid_step_value 是金额
+            step_ratio = (grid_step_value / benchmark_price) if benchmark_price else 0
             price_levels = optimizer.arithmetic_calculator.calculate_grid_levels(
                 price_lower, price_upper, grid_step_value, benchmark_price
             )
         else:
-            # 等比网格：grid_step_value 是百分比，需要转换为小数
+            # 等比网格：grid_step_value 是百分比(如15表示15%)。
+            # calculate_grid_levels 第三个参数要求"绝对步长(元)"，内部再除以基准价得到比例，
+            # 故此处必须传 绝对步长 = 基准价 × 百分比/100，否则会被二次缩放（15%→0.75%）。
             step_ratio = grid_step_value / 100.0
+            abs_step = benchmark_price * step_ratio
             price_levels = optimizer.geometric_calculator.calculate_grid_levels(
-                price_lower, price_upper, step_ratio, benchmark_price
+                price_lower, price_upper, abs_step, benchmark_price
             )
 
-        # 重新计算资金分配
+        # 用户可显式指定单笔数量；传入优化器以正确反推底仓与资金占用（不被静默覆盖）
+        forced_qty = custom_grid_params.get('singleTradeQuantity')
+        forced_qty = int(forced_qty) if forced_qty else None
+
+        # 重新计算资金分配（尊重用户单笔数量）
         fund_allocation = optimizer.calculate_fund_allocation_v2(
-            total_capital, price_levels, benchmark_price
+            total_capital, price_levels, benchmark_price,
+            forced_single_quantity=forced_qty
         )
 
-        # 允许自定义单笔交易数量，如果未提供则使用计算出的值
-        single_trade_quantity = custom_grid_params.get('singleTradeQuantity', fund_allocation.get('single_trade_quantity', grid_strategy['grid_config']['single_trade_quantity']))
+        # 单笔数量：以优化器最终采用的值为准（已包含用户指定或反推结果），
+        # 保证 grid_config 与 fund_allocation 两处一致。
+        single_trade_quantity = fund_allocation.get(
+            'single_trade_quantity',
+            grid_strategy['grid_config'].get('single_trade_quantity', 100)
+        )
 
         # 更新网格策略
         grid_strategy['price_range'] = {
@@ -534,7 +548,7 @@ class BacktestService:
                 grid_strategy['price_levels']
             )
 
-        return {
+        result = {
             'backtest_period': {
                 'start_date': start_date,
                 'end_date': end_date,
@@ -570,6 +584,19 @@ class BacktestService:
             'final_state': backtest_result['final_state'],
             'grid_strategy': grid_strategy  # 包含更新后的网格策略
         }
+
+        # 方案A：基于回测实测结果生成适宜度评估，保证三个标签同源一致
+        try:
+            from app.services.backtest_suitability import evaluate_from_backtest
+            result['suitability_evaluation'] = evaluate_from_backtest(
+                result['performance_metrics'],
+                result['benchmark_comparison'],
+                result['trading_metrics'],
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"基于回测的适宜度评估失败（忽略）: {e}")
+
+        return result
 
     def _format_equity_curve(self, equity_curve: list) -> list:
         """格式化资产曲线"""

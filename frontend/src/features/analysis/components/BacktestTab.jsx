@@ -13,7 +13,7 @@ import BacktestError from './backtest/BacktestError';
 /**
  * 回测分析标签页
  */
-export default function BacktestTab({ etfCode, exchangeCode, gridStrategy, type, totalCapital, autoEditParams = false, onGridApplied }) {
+export default function BacktestTab({ etfCode, exchangeCode, gridStrategy, type, totalCapital, autoEditParams = false, onGridApplied, onSuitabilityApplied }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [backtestResult, setBacktestResult] = useState(null);
@@ -50,6 +50,14 @@ export default function BacktestTab({ etfCode, exchangeCode, gridStrategy, type,
       onGridApplied(backtestResult.grid_strategy);
     }
   }, [backtestResult, onGridApplied]);
+
+  // 联动：把回测算出的适宜度评估（方案A，基于实测）上报，
+  // 使"概览""适宜度评估"标签与"回测分析"完全同源一致。
+  useEffect(() => {
+    if (backtestResult?.suitability_evaluation && typeof onSuitabilityApplied === 'function') {
+      onSuitabilityApplied(backtestResult.suitability_evaluation);
+    }
+  }, [backtestResult, onSuitabilityApplied]);
 
   // 自定义网格参数变更处理
   const handleCustomGridParamsChange = useCallback((newParams) => {

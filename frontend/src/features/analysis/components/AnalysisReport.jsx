@@ -40,6 +40,8 @@ const AnalysisReport = ({
   // 联动：回测分析里实际使用的网格（含用户自定义参数）。
   // 用户在回测中改了参数后，"网格策略"标签也显示同一套网格。
   const [effectiveGrid, setEffectiveGrid] = useState(null);
+  // 联动：回测算出的适宜度评估（方案A）。一旦回测产出，三个标签统一使用这份。
+  const [effectiveSuitability, setEffectiveSuitability] = useState(null);
 
 
   // 显示加载状态
@@ -129,8 +131,8 @@ const AnalysisReport = ({
           {activeTab === "overview" && (
             <OverviewTab
               etfInfo={etf_info}
-              suitabilityEvaluation={suitability_evaluation}
-              gridStrategy={grid_strategy}
+              suitabilityEvaluation={effectiveSuitability || suitability_evaluation}
+              gridStrategy={effectiveGrid || grid_strategy}
               dataQuality={data_quality}
               inputParameters={input_parameters}
             />
@@ -139,9 +141,10 @@ const AnalysisReport = ({
           {/* 适宜度评估标签页 */}
           {activeTab === "suitability" && (
             <SuitabilityCard
-              evaluation={suitability_evaluation}
+              evaluation={effectiveSuitability || suitability_evaluation}
               dataQuality={data_quality}
               showDetailed={true}
+              isCustomized={!!effectiveSuitability}
             />
           )}
 
@@ -171,6 +174,7 @@ const AnalysisReport = ({
                   totalCapital={input_parameters.total_capital}
                   autoEditParams={editParamsFirst}
                   onGridApplied={setEffectiveGrid}
+                  onSuitabilityApplied={setEffectiveSuitability}
                 />
               </Suspense>
             </div>
