@@ -19,6 +19,7 @@ const AnalysisReport = ({
   onBackToInput,
   onReAnalysis,
   editParamsFirst = false,
+  onEffectiveCapitalChange,
 }) => {
   const [activeTab, setActiveTab] = useState(editParamsFirst ? "backtest" : "overview");
   // 从首页勾选"分析前自定义参数"进入时，自动切到回测标签（仅一次，之后尊重用户手动切换）
@@ -42,6 +43,19 @@ const AnalysisReport = ({
   const [effectiveGrid, setEffectiveGrid] = useState(null);
   // 联动：回测算出的适宜度评估（方案A）。一旦回测产出，三个标签统一使用这份。
   const [effectiveSuitability, setEffectiveSuitability] = useState(null);
+
+  // 把回测自定义后实际使用的投资金额上报给父组件（顶部标题用），保持口径一致
+  useEffect(() => {
+    if (!onEffectiveCapitalChange) return;
+    if (effectiveGrid) {
+      let cap = effectiveGrid.total_capital;
+      if (!cap && effectiveGrid.fund_allocation) {
+        const fa = effectiveGrid.fund_allocation;
+        cap = (fa.base_position_amount || 0) + (fa.grid_trading_amount || 0) + (fa.reserve_amount || 0);
+      }
+      if (cap > 0) onEffectiveCapitalChange(Math.round(cap));
+    }
+  }, [effectiveGrid, onEffectiveCapitalChange]);
 
 
   // 显示加载状态
@@ -120,6 +134,24 @@ const AnalysisReport = ({
     );
   }
 
+  // 统一"投资资金"口径：一旦在回测中自定义并应用了网格(effectiveGrid)，
+  // 投资资金以该网格 fund_allocation(底仓+网格+预留)之和为准——它精确等于回测实际使用的总资金，
+  // 从而保证 概览/网格策略/回测分析 三个标签的投资金额完全一致（修复显示100万但实际95000的矛盾）。
+  const effectiveInputParameters = (() => {
+    if (effectiveGrid) {
+      // 优先用后端显式返回的实际总资金；否则回退到 fund_allocation 三部分之和
+      let cap = effectiveGrid.total_capital;
+      if (!cap && effectiveGrid.fund_allocation) {
+        const fa = effectiveGrid.fund_allocation;
+        cap = (fa.base_position_amount || 0) + (fa.grid_trading_amount || 0) + (fa.reserve_amount || 0);
+      }
+      if (cap > 0) {
+        return { ...input_parameters, total_capital: Math.round(cap) };
+      }
+    }
+    return input_parameters;
+  })();
+
   return (
     <div className="space-y-6">
       {/* 标签页导航 */}
@@ -134,7 +166,7 @@ const AnalysisReport = ({
               suitabilityEvaluation={effectiveSuitability || suitability_evaluation}
               gridStrategy={effectiveGrid || grid_strategy}
               dataQuality={data_quality}
-              inputParameters={input_parameters}
+              inputParameters={effectiveInputParameters}
             />
           )}
 
@@ -152,7 +184,7 @@ const AnalysisReport = ({
           {activeTab === "strategy" && (
             <GridParametersCard
               gridStrategy={effectiveGrid || grid_strategy}
-              inputParameters={input_parameters}
+              inputParameters={effectiveInputParameters}
               strategyRationale={strategy_rationale}
               adjustmentSuggestions={adjustment_suggestions}
               showDetailed={true}

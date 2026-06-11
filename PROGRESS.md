@@ -1,6 +1,15 @@
 # ETFer-Clone 项目进度存档
 
-> 最后更新：2026-06-11。网格自定义参数3大bug修复 + 适宜度改为基于回测(方案A) + start.bat健壮化。
+> 最后更新：2026-06-11。网格自定义参数3大bug修复 + 适宜度改为基于回测(方案A) + 投资金额四处口径统一 + start.bat健壮化。
+
+## 投资金额一致性修复（2026-06-11）
+
+- 现象：网格策略/概览/回测分析/顶部标题 四处"投资金额"对不上（如标题显示100万、回测实际952000）。
+- 根因：顶部标题与概览/网格策略读原始入参 `inputParameters.total_capital`（不随回测变），回测tab用自定义资金。
+- 修复：后端回测在 `grid_strategy.total_capital` 显式返回本次实际总资金作为权威值；前端
+  `AnalysisReport` 统一构造 `effectiveInputParameters`，并通过 `onEffectiveCapitalChange` 上报给
+  `AnalysisPage` 顶部标题；`GridParameterSettings` 输入框也优先读 `total_capital`。四处同源一致。
+
 
 ## 最新一轮改动（2026-06-11，已验证）
 

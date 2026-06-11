@@ -464,6 +464,7 @@ class BacktestService:
             )
             grid_strategy['fund_allocation'] = fund_allocation
             grid_strategy['realigned_to_period'] = True
+            grid_strategy['total_capital'] = round(total_capital, 2)
 
             return grid_strategy
         except Exception as e:  # noqa: BLE001
@@ -532,6 +533,8 @@ class BacktestService:
         grid_strategy['grid_config']['count'] = len(price_levels)
         grid_strategy['price_levels'] = price_levels
         grid_strategy['fund_allocation'] = fund_allocation
+        # 显式记录本次回测实际使用的总资金，供前端统一显示，避免三个标签口径不一致
+        grid_strategy['total_capital'] = round(total_capital, 2)
 
         return grid_strategy
 

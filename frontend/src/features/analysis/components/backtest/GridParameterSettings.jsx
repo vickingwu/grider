@@ -36,12 +36,19 @@ export default function GridParameterSettings({
   // 初始化网格参数
   useEffect(() => {
     if (gridStrategy && inputParameters) {
+      // 投资金额优先取后端显式返回的实际总资金 total_capital；
+      // 否则取「网格实际使用的资金」(底仓+网格+预留之和)；再否则回退入参。
+      // 这样自定义并重新回测后(gridStrategy更新)不会被原始入参覆盖，且与其他标签口径一致。
+      const fa = gridStrategy.fund_allocation || {};
+      const faTotal = (fa.base_position_amount || 0) + (fa.grid_trading_amount || 0) + (fa.reserve_amount || 0);
+      const effectiveCapital = gridStrategy.total_capital
+        || (faTotal > 0 ? Math.round(faTotal) : (inputParameters.total_capital || inputParameters.totalCapital || 0));
       const initialParams = {
         // 价格区间参数
         priceLower: gridStrategy.price_range?.lower || 0,
         priceUpper: gridStrategy.price_range?.upper || 0,
         // 投资金额参数
-        totalCapital: inputParameters.total_capital || inputParameters.totalCapital || 0,
+        totalCapital: effectiveCapital,
         // 基准价格参数
         benchmarkPrice: gridStrategy.current_price || 0,
         // 网格步长参数 - 等比网格显示为百分比
@@ -181,10 +188,14 @@ export default function GridParameterSettings({
   // 重置网格参数
   const handleResetGrid = () => {
     if (gridStrategy && inputParameters) {
+      const fa = gridStrategy.fund_allocation || {};
+      const faTotal = (fa.base_position_amount || 0) + (fa.grid_trading_amount || 0) + (fa.reserve_amount || 0);
+      const effectiveCapital = gridStrategy.total_capital
+        || (faTotal > 0 ? Math.round(faTotal) : (inputParameters.total_capital || inputParameters.totalCapital || 0));
       const defaultParams = {
         priceLower: gridStrategy.price_range?.lower || 0,
         priceUpper: gridStrategy.price_range?.upper || 0,
-        totalCapital: inputParameters.total_capital || inputParameters.totalCapital || 0,
+        totalCapital: effectiveCapital,
         benchmarkPrice: gridStrategy.current_price || 0,
         gridStepSize: gridStrategy.grid_config?.type?.includes('等比')
           ? (gridStrategy.grid_config?.step_ratio || 0) * 100

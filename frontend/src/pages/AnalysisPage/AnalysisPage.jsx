@@ -30,6 +30,8 @@ const AnalysisPage = () => {
   const [showParameterForm, setShowParameterForm] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [disclaimerChecked, setDisclaimerChecked] = useState(false);
+  // 回测自定义后实际使用的投资金额，用于让顶部标题与各标签口径一致
+  const [effectiveCapital, setEffectiveCapital] = useState(null);
 
   // 引用
   const parameterFormRef = useRef(null);
@@ -76,6 +78,7 @@ const AnalysisPage = () => {
   // 执行分析
   const handleAnalysis = async (parameters) => {
     setLoading(true);
+    setEffectiveCapital(null);  // 新分析重置，避免沿用上次回测的自定义金额
 
     try {
       const response = await analyzeETF(parameters);
@@ -264,7 +267,7 @@ const AnalysisPage = () => {
               {/* 移动端参数信息显示 */}
               <div className="mt-2">
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-                  <span>投资金额：{currentParams?.totalCapital?.toLocaleString()}元</span>
+                  <span>投资金额：{(effectiveCapital ?? currentParams?.totalCapital)?.toLocaleString()}元</span>
                   <span>网格类型：{currentParams?.gridType}</span>
                   <span>频率偏好：{currentParams?.riskPreference}</span>
                   <span>调节系数：{currentParams?.adjustmentCoefficient}</span>
@@ -291,7 +294,7 @@ const AnalysisPage = () => {
                     网格策略分析
                   </h1>
                   <p className="text-sm text-gray-600 truncate">
-                    投资金额：{currentParams?.totalCapital?.toLocaleString()}元 |
+                    投资金额：{(effectiveCapital ?? currentParams?.totalCapital)?.toLocaleString()}元 |
                     网格类型：{currentParams?.gridType} |
                     频率偏好：{currentParams?.riskPreference} |
                     调节系数：{currentParams?.adjustmentCoefficient}
@@ -329,6 +332,7 @@ const AnalysisPage = () => {
             onBackToInput={handleBackToHome}
             onReAnalysis={handleReAnalysis}
             editParamsFirst={currentParams?.editParamsFirst}
+            onEffectiveCapitalChange={setEffectiveCapital}
           />
         )}
 
