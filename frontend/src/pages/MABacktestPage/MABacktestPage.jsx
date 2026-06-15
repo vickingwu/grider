@@ -96,10 +96,15 @@ export default function MABacktestPage() {
                 </p>
               </div>
             </div>
-            <Link to="/" className="flex items-center gap-1 text-sm text-gray-600 hover:text-indigo-600">
-              <ArrowLeft className="w-4 h-4" />
-              返回首页
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link to="/ma-compare" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
+                多标的对比
+              </Link>
+              <Link to="/" className="flex items-center gap-1 text-sm text-gray-600 hover:text-indigo-600">
+                <ArrowLeft className="w-4 h-4" />
+                返回首页
+              </Link>
+            </div>
           </div>
 
           <div className="mt-4 bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-start gap-2">

@@ -1,7 +1,7 @@
 import React from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { Filter, LineChart } from "lucide-react";
+import { Filter, LineChart, GitCompare } from "lucide-react";
 import ParameterForm from "@features/analysis/components/ParameterForm";
 import AnalysisHistory from "@features/history/components/AnalysisHistory";
 import { generateAnalysisURL } from "@shared/utils/url";
@@ -51,6 +51,20 @@ export default function HomePage() {
           >
             <LineChart className="w-4 h-4" />
             均线策略回测
+          </Link>
+          <Link
+            to="/grid-compare"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-600 rounded-lg shadow-sm hover:bg-blue-50 transition-colors text-sm font-medium"
+          >
+            <GitCompare className="w-4 h-4" />
+            网格策略对比
+          </Link>
+          <Link
+            to="/ma-compare"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-600 rounded-lg shadow-sm hover:bg-indigo-50 transition-colors text-sm font-medium"
+          >
+            <GitCompare className="w-4 h-4" />
+            均线策略对比
           </Link>
         </div>
 
