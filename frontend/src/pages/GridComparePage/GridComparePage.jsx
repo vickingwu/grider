@@ -6,6 +6,7 @@ import { analyzeETF, runBacktest } from "@shared/services/api";
 import CustomCodeList from "@features/etf/components/CustomCodeList";
 import CompareMetricsTable from "@features/compare/CompareMetricsTable";
 import CompareReturnChart from "@features/compare/CompareReturnChart";
+import CompareTradeChart from "@features/compare/CompareTradeChart";
 
 const COLORS = ["#2563eb", "#f59e0b"]; // A=蓝, B=琥珀
 const toYMD = (d) => d.toISOString().slice(0, 10);
@@ -300,6 +301,26 @@ export default function GridComparePage() {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="font-semibold text-gray-900 mb-4">累计收益曲线对比</h2>
               <CompareReturnChart seriesA={seriesA} seriesB={seriesB} />
+            </div>
+
+            {/* 各标的价格 + 网格上下限 + 买卖点位走势图 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {validResults.map((it) => (
+                <div key={it.code} className="bg-white rounded-xl shadow-lg p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="inline-block w-3 h-3 rounded-full" style={{ background: it.color }} />
+                    <h2 className="font-semibold text-gray-900">
+                      {it.name}（{it.code}） · 价格/网格区间/买卖点
+                    </h2>
+                  </div>
+                  <CompareTradeChart
+                    priceCurve={it.raw?.price_curve}
+                    tradeRecords={it.raw?.trade_records}
+                    gridRange={it.raw?.grid_strategy?.price_range}
+                    color={it.color}
+                  />
+                </div>
+              ))}
             </div>
           </>
         )}

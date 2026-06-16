@@ -6,6 +6,7 @@ import { runMABacktest } from "@shared/services/api";
 import CustomCodeList from "@features/etf/components/CustomCodeList";
 import CompareMetricsTable from "@features/compare/CompareMetricsTable";
 import CompareReturnChart from "@features/compare/CompareReturnChart";
+import CompareTradeChart from "@features/compare/CompareTradeChart";
 
 const PRESET_PERIODS = [5, 15, 20, 50, 99, 128, 225];
 const COLORS = ["#4f46e5", "#f59e0b"]; // A=靛蓝, B=琥珀
@@ -340,6 +341,27 @@ export default function MAComparePage() {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="font-semibold text-gray-900 mb-4">累计收益曲线对比</h2>
               <CompareReturnChart seriesA={seriesA} seriesB={seriesB} />
+            </div>
+
+            {/* 各标的价格 + 均线 + 买卖点位走势图 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {validResults.map((it) => (
+                <div key={it.code} className="bg-white rounded-xl shadow-lg p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="inline-block w-3 h-3 rounded-full" style={{ background: it.color }} />
+                    <h2 className="font-semibold text-gray-900">
+                      {it.name}（{it.code}） · 价格/均线/买卖点
+                    </h2>
+                  </div>
+                  <CompareTradeChart
+                    priceCurve={it.raw?.price_curve}
+                    maCurve={it.raw?.ma_curve}
+                    tradeRecords={it.raw?.trade_records}
+                    maLabel={`${it.raw?.ma_config?.ma_type}${it.raw?.ma_config?.period}`}
+                    color={it.color}
+                  />
+                </div>
+              ))}
             </div>
           </>
         )}
