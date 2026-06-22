@@ -11,6 +11,7 @@ import MABacktestPage from "@pages/MABacktestPage";
 import MAScreenerPage from "@pages/MAScreenerPage";
 import MAComparePage from "@pages/MAComparePage";
 import GridComparePage from "@pages/GridComparePage";
+import FishBasinPage from "@pages/FishBasinPage";
 
 /**
  * 应用路由配置组件
@@ -26,6 +27,7 @@ export default function AppRouter() {
         <Route path="/ma-screener" element={<MAScreenerPage />} />
         <Route path="/ma-compare" element={<MAComparePage />} />
         <Route path="/grid-compare" element={<GridComparePage />} />
+        <Route path="/fish-basin" element={<FishBasinPage />} />
         <Route path="/analysis/:etfCode" element={<AnalysisPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

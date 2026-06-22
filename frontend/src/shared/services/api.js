@@ -126,6 +126,17 @@ class ApiService {
   }
 
   /**
+   * 鱼盆模型（市场风向标）：主流宽基指数 20 日线 YES/NO + 趋势强度
+   * @param {object} opts - { buffer, refresh }
+   */
+  async runFishBasin(opts = {}) {
+    const params = {};
+    if (opts.buffer != null) params.buffer = opts.buffer;
+    if (opts.refresh) params.refresh = 1;
+    return this.get("/screener/fish-basin", params);
+  }
+
+  /**
    * 健康检查
    */
   async healthCheck() {
@@ -174,6 +185,7 @@ export const getBatchNames = (codes) => apiService.getBatchNames(codes);
 export const runScreener = (forceRefresh) => apiService.runScreener(forceRefresh);
 export const runMABacktest = (params) => apiService.runMABacktest(params);
 export const runMAScreener = (opts) => apiService.runMAScreener(opts);
+export const runFishBasin = (opts) => apiService.runFishBasin(opts);
 export const healthCheck = () => apiService.healthCheck();
 export const getVersion = () => apiService.getVersion();
 export const runBacktest = (etfCode, exchangeCode, gridStrategy, backtestConfig, type, customGridParams) =>

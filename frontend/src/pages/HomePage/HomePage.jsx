@@ -1,7 +1,7 @@
 import React from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { Filter, LineChart, GitCompare } from "lucide-react";
+import { Filter, LineChart, GitCompare, Waves } from "lucide-react";
 import ParameterForm from "@features/analysis/components/ParameterForm";
 import AnalysisHistory from "@features/history/components/AnalysisHistory";
 import { generateAnalysisURL } from "@shared/utils/url";
@@ -31,6 +31,13 @@ export default function HomePage() {
       <div className="space-y-8">
         {/* 标的筛选器 + 均线回测入口 */}
         <div className="flex justify-end gap-3 flex-wrap">
+          <Link
+            to="/fish-basin"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-sky-200 text-sky-600 rounded-lg shadow-sm hover:bg-sky-50 transition-colors text-sm font-medium"
+          >
+            <Waves className="w-4 h-4" />
+            鱼盆模型
+          </Link>
           <Link
             to="/screener"
             className="flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-600 rounded-lg shadow-sm hover:bg-blue-50 transition-colors text-sm font-medium"
