@@ -9,11 +9,12 @@ import CompareReturnChart from "@features/compare/CompareReturnChart";
 import CompareTradeChart from "@features/compare/CompareTradeChart";
 
 const PRESET_PERIODS = [5, 15, 20, 50, 99, 128, 225];
-const COLORS = ["#4f46e5", "#f59e0b"]; // A=靛蓝, B=琥珀
+// 5 标的固定配色：靛蓝 / 琥珀 / 翠绿 / 玫红 / 天蓝
+const COLORS = ["#4f46e5", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9"];
 const toYMD = (d) => d.toISOString().slice(0, 10);
 const DEFAULT_END = toYMD(new Date());
 const DEFAULT_START = "2020-01-01";
-const MAX_SLOTS = 2; // 先做两个标的，验证后再加
+const MAX_SLOTS = 5; // 最多 5 个标的对比
 
 /** equity_curve + price_curve -> 累计收益率点序列 [{time, strat, hold}] */
 function toReturnPoints(result) {
@@ -42,7 +43,7 @@ export default function MAComparePage() {
   const [startDate, setStartDate] = useState(DEFAULT_START);
   const [endDate, setEndDate] = useState(DEFAULT_END);
 
-  // 对比标的槽位（先 2 个）
+  // 对比标的槽位（1-5 个，默认 2 个）
   const [codes, setCodes] = useState(["510300", "159915"]);
   const [activeSlot, setActiveSlot] = useState(0); // 自定义列表点选时填入哪个槽
 
@@ -58,6 +59,19 @@ export default function MAComparePage() {
       next[idx] = (val || "").replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
       return next;
     });
+  };
+
+  const addSlot = () => {
+    setCodes((prev) => (prev.length >= MAX_SLOTS ? prev : [...prev, ""]));
+  };
+
+  const removeSlot = (idx) => {
+    setCodes((prev) => {
+      if (prev.length <= 2) return prev; // 至少保留 2 个
+      const next = prev.filter((_, i) => i !== idx);
+      return next;
+    });
+    setActiveSlot((s) => (s >= idx && s > 0 ? s - 1 : s));
   };
 
   const handleRun = useCallback(async () => {
@@ -120,12 +134,6 @@ export default function MAComparePage() {
   }, [codes, capital, maType, effectivePeriod, startDate, endDate]);
 
   const validResults = (results || []).filter(Boolean);
-  const seriesA = validResults[0]
-    ? { ...validResults[0], points: validResults[0].points }
-    : null;
-  const seriesB = validResults[1]
-    ? { ...validResults[1], points: validResults[1].points }
-    : null;
 
   return (
     <>
@@ -144,7 +152,7 @@ export default function MAComparePage() {
               <div>
                 <h1 className="text-xl font-bold text-gray-900">均线策略对比回测</h1>
                 <p className="text-sm text-gray-600">
-                  同一套均线参数下，对比 2 个标的的均线策略表现
+                  同一套均线参数下，对比最多 5 个标的的均线策略表现
                 </p>
               </div>
             </div>
@@ -161,8 +169,8 @@ export default function MAComparePage() {
           <div className="mt-4 bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-start gap-2">
             <Info className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-indigo-800">
-              所有标的共用同一组均线类型/周期/资金/区间，保证横向可比。收益曲线默认双 Y 轴（左A右B），
-              适合两个标的收益量级差距较大时分别读数，可一键切换为单轴归一化。
+              所有标的共用同一组均线类型/周期/资金/区间，保证横向可比。2 个标的时收益曲线默认双 Y 轴（左A右B），
+              适合收益量级差距大时分别读数；3 个及以上自动用单轴归一化，并默认仅显示策略线（可开关显示持有线）。
             </p>
           </div>
         </div>
@@ -271,8 +279,18 @@ export default function MAComparePage() {
 
         {/* 对比标的 */}
         <div className="bg-white rounded-xl shadow-lg p-6 space-y-4">
-          <h2 className="font-semibold text-gray-900">对比标的（2 个）</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="font-semibold text-gray-900">对比标的（{codes.length} 个，最多 {MAX_SLOTS}）</h2>
+            <button
+              onClick={addSlot}
+              disabled={codes.length >= MAX_SLOTS}
+              className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg border border-indigo-300 text-indigo-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              添加标的
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {codes.slice(0, MAX_SLOTS).map((c, i) => (
               <div
                 key={i}
@@ -289,6 +307,18 @@ export default function MAComparePage() {
                   <span className="text-sm font-medium text-gray-700">
                     标的 {String.fromCharCode(65 + i)}
                   </span>
+                  {codes.length > 2 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSlot(i);
+                      }}
+                      className="ml-auto text-gray-400 hover:text-red-500"
+                      title="移除该标的"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
                 <input
                   value={c}
@@ -340,7 +370,7 @@ export default function MAComparePage() {
 
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="font-semibold text-gray-900 mb-4">累计收益曲线对比</h2>
-              <CompareReturnChart seriesA={seriesA} seriesB={seriesB} />
+              <CompareReturnChart series={validResults} />
             </div>
 
             {/* 各标的价格 + 均线 + 买卖点位走势图 */}

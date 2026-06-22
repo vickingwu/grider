@@ -1,18 +1,18 @@
 import React, { useState, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { ArrowLeft, GitCompare, Info } from "lucide-react";
+import { ArrowLeft, GitCompare, Info, Plus, X } from "lucide-react";
 import { analyzeETF, runBacktest } from "@shared/services/api";
 import CustomCodeList from "@features/etf/components/CustomCodeList";
 import CompareMetricsTable from "@features/compare/CompareMetricsTable";
 import CompareReturnChart from "@features/compare/CompareReturnChart";
 import CompareTradeChart from "@features/compare/CompareTradeChart";
 
-const COLORS = ["#2563eb", "#f59e0b"]; // A=蓝, B=琥珀
+const COLORS = ["#2563eb", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9"];
 const toYMD = (d) => d.toISOString().slice(0, 10);
 const DEFAULT_END = toYMD(new Date());
 const DEFAULT_START = "2020-01-01";
-const MAX_SLOTS = 2;
+const MAX_SLOTS = 5;
 
 /** equity_curve + price_curve -> 累计收益率点序列 [{time, strat, hold}] */
 function toReturnPoints(result, initCapital) {
@@ -38,6 +38,8 @@ export default function GridComparePage() {
   const [riskPreference, setRiskPreference] = useState("均衡");
   const [startDate, setStartDate] = useState(DEFAULT_START);
   const [endDate, setEndDate] = useState(DEFAULT_END);
+  // 全局网格步长（留空=各标的按 ATR 自动；填值=全局统一应用，等比按%、等差按元）
+  const [gridStep, setGridStep] = useState("");
 
   const [codes, setCodes] = useState(["510300", "159915"]);
   const [activeSlot, setActiveSlot] = useState(0);
@@ -53,6 +55,15 @@ export default function GridComparePage() {
       next[idx] = (val || "").replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
       return next;
     });
+  };
+
+  const addSlot = () => {
+    setCodes((prev) => (prev.length >= MAX_SLOTS ? prev : [...prev, ""]));
+  };
+
+  const removeSlot = (idx) => {
+    setCodes((prev) => (prev.length <= 2 ? prev : prev.filter((_, i) => i !== idx)));
+    setActiveSlot((s) => (s >= idx && s > 0 ? s - 1 : s));
   };
 
   const handleRun = useCallback(async () => {
@@ -85,14 +96,19 @@ export default function GridComparePage() {
         const info = analysis.data.etf_info;
         const gridStrategy = analysis.data.grid_strategy;
 
-        // 2) 回测：同区间，复用该标的的 ATR 网格
+        // 2) 回测：同区间，复用该标的的 ATR 网格；如填了全局步长则统一应用
+        const customParams = { startDate: startDate || undefined, endDate: endDate || undefined };
+        const stepVal = parseFloat(gridStep);
+        if (gridStep !== "" && !isNaN(stepVal) && stepVal > 0) {
+          customParams.gridStepSize = stepVal; // 等比按%，等差按元
+        }
         const bt = await runBacktest(
           info.code,
           info.exchange_code,
           gridStrategy,
           null,
           info.type,
-          { startDate: startDate || undefined, endDate: endDate || undefined }
+          customParams
         );
         const d = bt.data;
         const m = d.performance_metrics || {};
@@ -123,11 +139,9 @@ export default function GridComparePage() {
       setLoading(false);
       setProgress("");
     }
-  }, [codes, capital, gridType, riskPreference, startDate, endDate]);
+  }, [codes, capital, gridType, riskPreference, startDate, endDate, gridStep]);
 
   const validResults = (results || []).filter(Boolean);
-  const seriesA = validResults[0] || null;
-  const seriesB = validResults[1] || null;
 
   return (
     <>
@@ -145,7 +159,7 @@ export default function GridComparePage() {
               <div>
                 <h1 className="text-xl font-bold text-gray-900">网格策略对比回测</h1>
                 <p className="text-sm text-gray-600">
-                  同一资金/类型/区间下，对比 2 个标的的网格策略表现
+                  同一资金/类型/区间下，对比最多 5 个标的的网格策略表现
                 </p>
               </div>
             </div>
@@ -157,8 +171,9 @@ export default function GridComparePage() {
           <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
             <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-blue-800">
-              网格的价格区间与步长由每个标的的 ATR 自动生成（因不同标的价位差异大，强制共用区间无意义）；
-              共用的是资金、网格类型、频率偏好与回测区间。收益曲线默认双 Y 轴（左A右B），可切换单轴归一化。
+              网格的价格区间由每个标的的 ATR 自动生成（因不同标的价位差异大，强制共用区间无意义）；
+              共用的是资金、网格类型、频率偏好、回测区间与（可选）全局网格步长。
+              2 个标的时收益曲线默认双 Y 轴（左A右B）；3 个及以上自动单轴归一化，默认仅显示策略线（可开关持有线）。
             </p>
           </div>
         </div>
@@ -197,7 +212,7 @@ export default function GridComparePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm text-gray-600 mb-2">网格类型</label>
               <div className="flex gap-2">
@@ -234,13 +249,41 @@ export default function GridComparePage() {
                 ))}
               </div>
             </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-2">
+                全局网格步长（{gridType === "等比" ? "%" : "元"}，可选）
+              </label>
+              <input
+                type="number"
+                value={gridStep}
+                onChange={(e) => setGridStep(e.target.value)}
+                step={gridType === "等比" ? "0.5" : "0.01"}
+                min="0"
+                placeholder={`留空=各标的按ATR自动`}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                填值则所有标的统一用该步长（{gridType === "等比" ? "如 5 表示 5%" : "相邻网格价差"}），
+                留空则各标的按自身 ATR 自动。
+              </p>
+            </div>
           </div>
         </div>
 
         {/* 对比标的 */}
         <div className="bg-white rounded-xl shadow-lg p-6 space-y-4">
-          <h2 className="font-semibold text-gray-900">对比标的（2 个）</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="font-semibold text-gray-900">对比标的（{codes.length} 个，最多 {MAX_SLOTS}）</h2>
+            <button
+              onClick={addSlot}
+              disabled={codes.length >= MAX_SLOTS}
+              className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              添加标的
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {codes.slice(0, MAX_SLOTS).map((c, i) => (
               <div
                 key={i}
@@ -254,6 +297,18 @@ export default function GridComparePage() {
                   <span className="text-sm font-medium text-gray-700">
                     标的 {String.fromCharCode(65 + i)}
                   </span>
+                  {codes.length > 2 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSlot(i);
+                      }}
+                      className="ml-auto text-gray-400 hover:text-red-500"
+                      title="移除该标的"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
                 <input
                   value={c}
@@ -300,7 +355,7 @@ export default function GridComparePage() {
             </div>
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="font-semibold text-gray-900 mb-4">累计收益曲线对比</h2>
-              <CompareReturnChart seriesA={seriesA} seriesB={seriesB} />
+              <CompareReturnChart series={validResults} />
             </div>
 
             {/* 各标的价格 + 网格上下限 + 买卖点位走势图 */}
