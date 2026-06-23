@@ -52,8 +52,8 @@ FISH_BASIN_INDICES: List[Dict] = [
     {"code": "HSTECH", "name": "恒生科技", "source": "hk", "sym": "HSTECH", "cat": "港股"},
     {"code": "HSCEI", "name": "国企指数", "source": "hk", "sym": "HSCEI", "cat": "港股"},
     # 商品（上海金交所现货，人民币/克；趋势与伦敦金一致）
-    {"code": "Au99.99", "name": "黄金现价", "source": "sge", "sym": "Au99.99", "cat": "商品"},
-    {"code": "Ag99.99", "name": "白银现价", "source": "sge", "sym": "Ag99.99", "cat": "商品"},
+    {"code": "Au99.99", "name": "上海金现价", "source": "sge", "sym": "Au99.99", "cat": "商品"},
+    {"code": "Ag99.99", "name": "上海银现价", "source": "sge", "sym": "Ag99.99", "cat": "商品"},
 ]
 
 
@@ -197,9 +197,9 @@ def _evaluate_one(item: Dict, buffer_pct: float) -> Dict:
 
 
 def _assign_strength_and_rankchange(results: List[Dict], prev_rank: Dict[str, int]) -> None:
-    """按偏离率绝对值降序赋趋势强度（1=最强）；并与上次排名对比给出 rank_change。"""
+    """按偏离率从高到低赋趋势强度（1=偏离率最高/最强）；并与上次排名对比给出 rank_change。"""
     valid = [r for r in results if r.get("deviation") is not None]
-    valid.sort(key=lambda r: abs(r["deviation"]), reverse=True)
+    valid.sort(key=lambda r: r["deviation"], reverse=True)
     for rank, r in enumerate(valid, start=1):
         r["strength"] = rank
         old = prev_rank.get(r["code"])

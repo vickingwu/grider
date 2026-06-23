@@ -59,8 +59,8 @@ export default function FishBasinPage() {
 
   const results = data?.results || [];
   const { sorted, sortKey, sortDir, requestSort } = useSortableData(results, {
-    key: "strength",
-    dir: "asc",
+    key: "deviation",
+    dir: "desc",
   });
 
   const ms = data?.market_state;
@@ -175,14 +175,14 @@ export default function FishBasinPage() {
                     <SortableTh label="排序" sortKey="strength" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
                     <th className="py-2 px-2">代码</th>
                     <th className="py-2 px-2">名称</th>
-                    <SortableTh label="涨幅%" sortKey="change_pct" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
-                    <SortableTh label="现价" sortKey="price" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
-                    <SortableTh label="20日线" sortKey="ma20" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
-                    <SortableTh label="偏离率" sortKey="deviation" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
-                    <SortableTh label="量比" sortKey="vol_ratio" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
-                    <th className="py-2 px-2 text-center">状态</th>
+                    <SortableTh label="涨幅%" sortKey="change_pct" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
+                    <SortableTh label="现价" sortKey="price" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
+                    <SortableTh label="20日线" sortKey="ma20" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
+                    <SortableTh label="偏离率" sortKey="deviation" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
+                    <SortableTh label="量比" sortKey="vol_ratio" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
+                    <th className="py-2 px-2 text-left">状态</th>
                     <SortableTh label="状态转变" sortKey="status_since" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
-                    <SortableTh label="区间涨幅%" sortKey="range_pct" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="区间涨幅%" sortKey="range_pct" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
                     <SortableTh label="排序变化" sortKey="rank_change" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
                     <th className="py-2 px-2">数据时间</th>
                   </tr>
@@ -201,14 +201,14 @@ export default function FishBasinPage() {
                       </td>
                       <td className="py-2 px-2 text-gray-500">{r.code}</td>
                       <td className="py-2 px-2 font-medium text-gray-900">{r.name}</td>
-                      <td className={`py-2 px-2 text-right ${
+                      <td className={`py-2 px-2 text-left ${
                         typeof r.change_pct === "number" ? (r.change_pct > 0 ? "text-up-600" : r.change_pct < 0 ? "text-down-600" : "") : ""
                       }`}>{signedPct(r.change_pct)}</td>
-                      <td className="py-2 px-2 text-right">{intFmt(r.price)}</td>
-                      <td className="py-2 px-2 text-right text-gray-600">{intFmt(r.ma20)}</td>
-                      <td className="py-2 px-2 text-right font-medium" style={{ background: devBg(r.deviation) }}>{signedPct(r.deviation)}</td>
-                      <td className="py-2 px-2 text-right text-gray-600">{typeof r.vol_ratio === "number" ? r.vol_ratio.toFixed(2) : "—"}</td>
-                      <td className="py-2 px-2 text-center">
+                      <td className="py-2 px-2 text-left">{intFmt(r.price)}</td>
+                      <td className="py-2 px-2 text-left text-gray-600">{intFmt(r.ma20)}</td>
+                      <td className="py-2 px-2 text-left font-medium" style={{ background: devBg(r.deviation) }}>{signedPct(r.deviation)}</td>
+                      <td className="py-2 px-2 text-left text-gray-600">{typeof r.vol_ratio === "number" ? r.vol_ratio.toFixed(2) : "—"}</td>
+                      <td className="py-2 px-2 text-left">
                         {r.status === "YES" && (
                           <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">YES</span>
                         )}
@@ -218,17 +218,17 @@ export default function FishBasinPage() {
                         {!r.status && <span className="text-gray-400 text-xs">失败</span>}
                       </td>
                       <td className="py-2 px-2 text-gray-500 whitespace-nowrap">{r.status_since || "—"}</td>
-                      <td className={`py-2 px-2 text-right ${
+                      <td className={`py-2 px-2 text-left ${
                         typeof r.range_pct === "number" ? (r.range_pct > 0 ? "text-up-600" : r.range_pct < 0 ? "text-down-600" : "") : ""
                       }`}>{signedPct(r.range_pct)}</td>
-                      <td className="py-2 px-2"><RankChange v={r.rank_change} /></td>
+                      <td className="py-2 px-2 text-left"><RankChange v={r.rank_change} /></td>
                       <td className="py-2 px-2 text-gray-400 whitespace-nowrap">{r.latest_date || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <p className="text-xs text-gray-500 mt-3">
-                排序按偏离率绝对值（1=短期最强）。临界值 = 20日均线 ×(1+浮动%)；现价/临界/20日线均取整。
+                排序按偏离率从高到低（1=偏离率最高/最强）。临界值 = 20日均线 ×(1+浮动%)；现价/临界/20日线均取整。
                 偏离率底色：红=强(站上线)、绿=弱(跌破线)。量比=当日量÷近5日均量（商品现货无量显示—）。
                 区间涨幅=本轮状态起点至今涨跌。排序变化=较上次刷新的名次升降。
                 {data?.elapsed_seconds != null && ` 本次计算耗时 ${data.elapsed_seconds}s。`}
