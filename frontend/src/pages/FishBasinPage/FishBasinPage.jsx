@@ -8,6 +8,23 @@ import SortableTh from "@shared/components/ui/SortableTh";
 
 const pct = (v) => (typeof v === "number" ? (v * 100).toFixed(2) + "%" : "—");
 const signedPct = (v) => (typeof v === "number" ? (v >= 0 ? "+" : "") + (v * 100).toFixed(2) + "%" : "—");
+const intFmt = (v) => (typeof v === "number" ? v.toLocaleString("en-US") : "—");
+
+// 偏离率背景色：正=红渐变(越强越红)，负=绿渐变(越弱越绿)
+const devBg = (v) => {
+  if (typeof v !== "number") return "";
+  const a = Math.min(Math.abs(v) / 0.12, 1); // 12% 封顶
+  if (v > 0) return `rgba(239,68,68,${0.12 + a * 0.5})`;
+  if (v < 0) return `rgba(16,185,129,${0.12 + a * 0.5})`;
+  return "";
+};
+
+// 排序变化箭头：正=上升(变强)红，负=下降绿
+const RankChange = ({ v }) => {
+  if (typeof v !== "number" || v === 0) return <span className="text-gray-400">0</span>;
+  if (v > 0) return <span className="text-red-600 font-medium">↑{v}</span>;
+  return <span className="text-green-600 font-medium">↓{Math.abs(v)}</span>;
+};
 
 const STATE_STYLE = {
   bull: { bg: "from-red-50 to-rose-100", text: "text-red-700", dot: "bg-red-500", label: "牛市状态" },
@@ -129,15 +146,16 @@ export default function FishBasinPage() {
               disabled={loading}
               className="px-5 py-2.5 bg-sky-600 text-white rounded-lg hover:bg-sky-700 disabled:opacity-50 font-medium"
             >
-              {loading ? "计算中..." : "应用并刷新"}
+              {loading ? "计算中..." : "刷新"}
             </button>
             <button
               onClick={() => load({ refresh: 1 })}
               disabled={loading}
               className="flex items-center gap-1 px-4 py-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              title="忽略缓存，重新拉取所有标的最新行情"
             >
               <RefreshCw className="w-4 h-4" />
-              强制重算
+              强制更新数据
             </button>
           </div>
           {error && (
@@ -154,21 +172,25 @@ export default function FishBasinPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 text-gray-500 text-left">
-                    <SortableTh label="强度" sortKey="strength" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
-                    <th className="py-2 px-3">代码</th>
-                    <th className="py-2 px-3">名称</th>
-                    <SortableTh label="涨幅" sortKey="change_pct" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="排序" sortKey="strength" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
+                    <th className="py-2 px-2">代码</th>
+                    <th className="py-2 px-2">名称</th>
+                    <SortableTh label="涨幅%" sortKey="change_pct" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
                     <SortableTh label="现价" sortKey="price" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
-                    <SortableTh label="临界值" sortKey="threshold" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
-                    <th className="py-2 px-3 text-center">状态</th>
-                    <SortableTh label="状态转变时间" sortKey="status_since" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
+                    <SortableTh label="20日线" sortKey="ma20" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
                     <SortableTh label="偏离率" sortKey="deviation" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="量比" sortKey="vol_ratio" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <th className="py-2 px-2 text-center">状态</th>
+                    <SortableTh label="状态转变" sortKey="status_since" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
+                    <SortableTh label="区间涨幅%" sortKey="range_pct" activeKey={sortKey} dir={sortDir} onSort={requestSort} />
+                    <SortableTh label="排序变化" sortKey="rank_change" activeKey={sortKey} dir={sortDir} onSort={requestSort} align="left" />
+                    <th className="py-2 px-2">数据时间</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sorted.map((r) => (
                     <tr key={r.code} className="border-b border-gray-100">
-                      <td className="py-2 px-3">
+                      <td className="py-2 px-2">
                         {r.strength != null ? (
                           <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
                             r.strength === 1 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"
@@ -177,14 +199,16 @@ export default function FishBasinPage() {
                           </span>
                         ) : "—"}
                       </td>
-                      <td className="py-2 px-3 text-gray-500">{r.code}</td>
-                      <td className="py-2 px-3 font-medium text-gray-900">{r.name}</td>
-                      <td className={`py-2 px-3 text-right ${
+                      <td className="py-2 px-2 text-gray-500">{r.code}</td>
+                      <td className="py-2 px-2 font-medium text-gray-900">{r.name}</td>
+                      <td className={`py-2 px-2 text-right ${
                         typeof r.change_pct === "number" ? (r.change_pct > 0 ? "text-up-600" : r.change_pct < 0 ? "text-down-600" : "") : ""
                       }`}>{signedPct(r.change_pct)}</td>
-                      <td className="py-2 px-3 text-right">{typeof r.price === "number" ? r.price.toFixed(3) : "—"}</td>
-                      <td className="py-2 px-3 text-right text-gray-600">{typeof r.threshold === "number" ? r.threshold.toFixed(3) : "—"}</td>
-                      <td className="py-2 px-3 text-center">
+                      <td className="py-2 px-2 text-right">{intFmt(r.price)}</td>
+                      <td className="py-2 px-2 text-right text-gray-600">{intFmt(r.ma20)}</td>
+                      <td className="py-2 px-2 text-right font-medium" style={{ background: devBg(r.deviation) }}>{signedPct(r.deviation)}</td>
+                      <td className="py-2 px-2 text-right text-gray-600">{typeof r.vol_ratio === "number" ? r.vol_ratio.toFixed(2) : "—"}</td>
+                      <td className="py-2 px-2 text-center">
                         {r.status === "YES" && (
                           <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">YES</span>
                         )}
@@ -193,16 +217,20 @@ export default function FishBasinPage() {
                         )}
                         {!r.status && <span className="text-gray-400 text-xs">失败</span>}
                       </td>
-                      <td className="py-2 px-3 text-center text-gray-500">{r.status_since || "—"}</td>
-                      <td className={`py-2 px-3 text-right font-medium ${
-                        typeof r.deviation === "number" ? (r.deviation > 0 ? "text-up-600" : r.deviation < 0 ? "text-down-600" : "") : ""
-                      }`}>{signedPct(r.deviation)}</td>
+                      <td className="py-2 px-2 text-gray-500 whitespace-nowrap">{r.status_since || "—"}</td>
+                      <td className={`py-2 px-2 text-right ${
+                        typeof r.range_pct === "number" ? (r.range_pct > 0 ? "text-up-600" : r.range_pct < 0 ? "text-down-600" : "") : ""
+                      }`}>{signedPct(r.range_pct)}</td>
+                      <td className="py-2 px-2"><RankChange v={r.rank_change} /></td>
+                      <td className="py-2 px-2 text-gray-400 whitespace-nowrap">{r.latest_date || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <p className="text-xs text-gray-500 mt-3">
-                强度按偏离率绝对值排名，1 = 短期最强。临界值 = 20 日均线 × (1 + 浮动%)。
+                排序按偏离率绝对值（1=短期最强）。临界值 = 20日均线 ×(1+浮动%)；现价/临界/20日线均取整。
+                偏离率底色：红=强(站上线)、绿=弱(跌破线)。量比=当日量÷近5日均量（商品现货无量显示—）。
+                区间涨幅=本轮状态起点至今涨跌。排序变化=较上次刷新的名次升降。
                 {data?.elapsed_seconds != null && ` 本次计算耗时 ${data.elapsed_seconds}s。`}
               </p>
             </div>

@@ -1,72 +1,142 @@
-"""鱼盆模型服务（市场风向标）
+"""鱼盆模型服务（市场风向标）v2
 
-对一组主流宽基指数，以「20日均线」为临界值（可选上下浮动 buffer），
-判断当前收盘价相对临界值的强弱（YES/NO），并衍生偏离率、趋势强度、状态持续时间。
+以「20日均线」为临界值（可选上下浮动 buffer），判断主流指数/品种相对临界值的强弱（YES/NO），
+并衍生偏离率、趋势强度、量比、区间涨幅、状态持续时间、排序变化。
 
 定位：判断市场大势/风格强弱，非买卖信号。
 
-复用：data_service 取指数日线、ma_engine.calculate_ma 算20日线。串行执行 + 结果缓存。
+多数据源（均为免费 AkShare，本机可用）：
+- sina_index : A股/中证系指数  ak.stock_zh_index_daily(shxxxxxx / szxxxxxx)
+- csindex    : 中证官方接口（新浪缺数据时兜底，如中证2000）ak.stock_zh_index_hist_csindex
+- hk         : 港股指数        ak.stock_hk_index_daily_sina(HSI/HSTECH/HSCEI)
+- us         : 美股ETF         ak.stock_us_daily(QQQ/SPY)
+- sge        : 上海金交所现货   ak.spot_hist_sge(Au99.99/Ag99.99)
 """
 
 import time
 import threading
-from datetime import datetime, timedelta
-from typing import Dict, List
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
-from app.services.data_service import _cache_get, _cache_set, DataService
+import pandas as pd
+import akshare as ak
+
+from app.services.data_service import _cache_get, _cache_set
 from app.algorithms.backtest.ma_engine import calculate_ma
-from app.utils.helper import determine_country
-from app.services.etf_analysis_service import ETFAnalysisService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_CACHE_TTL = 1800  # 30 分钟（盘后数据基本不变）
+_CACHE_TTL = 1800          # 行情缓存 30 分钟
+_SNAPSHOT_TTL = 86400      # 上一次排名快照保留 1 天（用于"排序变化"）
 _MA_PERIOD = 20
 
-# 鱼盆模型默认指数清单（宽基，对齐博主表格 + 北证50；微盘股免费源无数据，剔除）
+# 鱼盆模型标的清单（韩/日/台 免费源取不到，已剔除；微盘股免费源无数据，已剔除）
+# source/sym 决定取数方式；name 为显示名
 FISH_BASIN_INDICES: List[Dict] = [
-    {"code": "000016", "name": "上证50"},
-    {"code": "000300", "name": "沪深300"},
-    {"code": "000688", "name": "科创50"},
-    {"code": "399006", "name": "创业板指"},
-    {"code": "000905", "name": "中证500"},
-    {"code": "000852", "name": "中证1000"},
-    {"code": "932000", "name": "中证2000"},
-    {"code": "899050", "name": "北证50"},
+    # 宽基指数
+    {"code": "000688", "name": "科创50", "source": "sina_index", "sym": "sh000688", "cat": "宽基"},
+    {"code": "399006", "name": "创业板指", "source": "sina_index", "sym": "sz399006", "cat": "宽基"},
+    {"code": "000852", "name": "中证1000", "source": "sina_index", "sym": "sh000852", "cat": "宽基"},
+    {"code": "000905", "name": "中证500", "source": "sina_index", "sym": "sh000905", "cat": "宽基"},
+    {"code": "000510", "name": "中证A500", "source": "sina_index", "sym": "sh000510", "cat": "宽基"},
+    {"code": "932000", "name": "中证2000", "source": "csindex", "sym": "932000", "cat": "宽基"},
+    {"code": "000300", "name": "沪深300", "source": "sina_index", "sym": "sh000300", "cat": "宽基"},
+    {"code": "000016", "name": "上证50", "source": "sina_index", "sym": "sh000016", "cat": "宽基"},
+    {"code": "899050", "name": "北证50", "source": "sina_index", "sym": "bj899050", "cat": "宽基"},
+    # 海外（美股ETF）
+    {"code": "QQQ", "name": "纳指100", "source": "us", "sym": "QQQ", "cat": "海外"},
+    {"code": "SPY", "name": "标普500", "source": "us", "sym": "SPY", "cat": "海外"},
+    # 港股
+    {"code": "HSI", "name": "恒生指数", "source": "hk", "sym": "HSI", "cat": "港股"},
+    {"code": "HSTECH", "name": "恒生科技", "source": "hk", "sym": "HSTECH", "cat": "港股"},
+    {"code": "HSCEI", "name": "国企指数", "source": "hk", "sym": "HSCEI", "cat": "港股"},
+    # 商品（上海金交所现货，人民币/克；趋势与伦敦金一致）
+    {"code": "Au99.99", "name": "黄金现价", "source": "sge", "sym": "Au99.99", "cat": "商品"},
+    {"code": "Ag99.99", "name": "白银现价", "source": "sge", "sym": "Ag99.99", "cat": "商品"},
 ]
 
 
+def _retry(fn, *args, retries: int = 3, delay: float = 1.2, **kwargs):
+    last = None
+    for i in range(retries):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:  # noqa: BLE001
+            last = e
+            if i < retries - 1:
+                time.sleep(delay)
+    raise last
+
+
+def _fetch_daily(item: Dict) -> Optional[pd.DataFrame]:
+    """按标的类型取日线，返回统一列 [date(str), close(float), volume(float)] 升序。带 30 分钟缓存。"""
+    source = item.get("source")
+    sym = item.get("sym")
+    cache_key = f"fb_daily:{source}:{sym}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return pd.DataFrame(cached)
+
+    df = None
+    try:
+        if source == "sina_index":
+            raw = _retry(ak.stock_zh_index_daily, symbol=sym)
+            if raw is not None and len(raw):
+                df = raw[["date", "close", "volume"]].copy()
+        elif source == "csindex":
+            raw = _retry(ak.stock_zh_index_hist_csindex, symbol=sym,
+                         start_date="20180101", end_date=datetime.now().strftime("%Y%m%d"))
+            if raw is not None and len(raw):
+                raw = raw.rename(columns={"日期": "date", "收盘": "close", "成交量": "volume"})
+                df = raw[["date", "close", "volume"]].copy()
+        elif source == "hk":
+            raw = _retry(ak.stock_hk_index_daily_sina, symbol=sym)
+            if raw is not None and len(raw):
+                vol = "volume" if "volume" in raw.columns else None
+                cols = ["date", "close"] + ([vol] if vol else [])
+                df = raw[cols].copy()
+                if not vol:
+                    df["volume"] = 0
+        elif source == "us":
+            raw = _retry(ak.stock_us_daily, symbol=sym)
+            if raw is not None and len(raw):
+                df = raw[["date", "close", "volume"]].copy()
+        elif source == "sge":
+            raw = _retry(ak.spot_hist_sge, symbol=sym)
+            if raw is not None and len(raw):
+                df = raw[["date", "close"]].copy()
+                df["volume"] = 0  # 现货无成交量
+        if df is None or len(df) == 0:
+            return None
+
+        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+        df["close"] = pd.to_numeric(df["close"], errors="coerce")
+        df["volume"] = pd.to_numeric(df.get("volume", 0), errors="coerce").fillna(0)
+        df = df.dropna(subset=["close"]).sort_values("date").reset_index(drop=True)
+        _cache_set(cache_key, df.to_dict("list"), ttl=_CACHE_TTL)
+        return df
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"鱼盆取数失败 {item.get('code')}({source}:{sym}): {e}")
+        return None
+
+
 def _evaluate_one(item: Dict, buffer_pct: float) -> Dict:
-    """对单个指数计算鱼盆模型字段。buffer_pct 为浮动百分比（如 2 表示 ±2%）。"""
     code = str(item.get("code", "")).strip()
     name = item.get("name", code)
+    cat = item.get("cat", "")
     try:
-        processed_code, country = determine_country(code)
-        svc = ETFAnalysisService(country=country)
-        info = svc.data_client.search_by_ticker(processed_code, country)
-        exchange_code = info.get("exchange_code", "")
-        sec_type = info.get("type", "INDEX")
-        disp_name = info.get("name") or name
-
-        # 取最近约 90 个自然日的日线（>120天会走日线，这里用 get_5min_kline 的日线兜底路径）
-        ds: DataService = svc.data_client
-        today = datetime.now()
-        end_date = today.strftime("%Y-%m-%d")
-        # 取足够长的窗口以保证 20 日线 + 找状态翻转（约 250 个交易日）
-        start_date = (today - timedelta(days=400)).strftime("%Y-%m-%d")
-        kbars = ds.get_5min_kline(processed_code, exchange_code, start_date, end_date, sec_type)
-        if not kbars or len(kbars) < _MA_PERIOD + 1:
+        df = _fetch_daily(item)
+        if df is None or len(df) < _MA_PERIOD + 1:
             raise ValueError("数据不足以计算20日线")
 
-        kbars = sorted(kbars, key=lambda k: k.time)
-        closes = [float(k.close) for k in kbars]
-        dates = [k.time.strftime("%Y-%m-%d") for k in kbars]
+        closes = df["close"].tolist()
+        dates = df["date"].tolist()
+        volumes = df["volume"].tolist()
 
         ma = calculate_ma(closes, _MA_PERIOD, "SMA")
         factor = 1.0 + (buffer_pct or 0) / 100.0
 
-        # 当前值
         cur_close = closes[-1]
         cur_ma = ma[-1]
         if cur_ma is None:
@@ -74,57 +144,71 @@ def _evaluate_one(item: Dict, buffer_pct: float) -> Dict:
         cur_threshold = cur_ma * factor
         cur_status = "YES" if cur_close >= cur_threshold else "NO"
 
-        # 涨幅%（最新一日）
-        change_pct = None
-        if len(closes) >= 2 and closes[-2]:
-            change_pct = (cur_close / closes[-2] - 1)
-
-        # 偏离率
+        change_pct = (cur_close / closes[-2] - 1) if (len(closes) >= 2 and closes[-2]) else None
         deviation = (cur_close - cur_threshold) / cur_threshold if cur_threshold else None
 
-        # 状态持续时间：从最新往回找，最近一次状态翻转的日期
+        # 量比 = 当日量 / 过去5日均量（现货无量则 None）
+        vol_ratio = None
+        if volumes[-1] and len(volumes) >= 6:
+            prev5 = volumes[-6:-1]
+            avg5 = sum(prev5) / len(prev5) if prev5 else 0
+            if avg5 > 0:
+                vol_ratio = volumes[-1] / avg5
+
+        # 状态持续起点：最近一次状态翻转后的第一天
         status_since = dates[-1]
+        since_idx = len(closes) - 1
         for i in range(len(closes) - 2, -1, -1):
             if ma[i] is None:
                 break
-            th = ma[i] * factor
-            st = "YES" if closes[i] >= th else "NO"
+            st = "YES" if closes[i] >= ma[i] * factor else "NO"
             if st != cur_status:
-                # i+1 是翻转后的第一天
                 status_since = dates[i + 1]
+                since_idx = i + 1
                 break
             status_since = dates[i]
+            since_idx = i
+
+        # 区间涨幅：状态起点至今
+        range_pct = None
+        if closes[since_idx]:
+            range_pct = cur_close / closes[since_idx] - 1
 
         return {
             "code": code,
-            "name": disp_name,
+            "name": name,
+            "category": cat,
             "change_pct": round(change_pct, 4) if change_pct is not None else None,
-            "price": round(cur_close, 3),
-            "threshold": round(cur_threshold, 3),
-            "ma20": round(cur_ma, 3),
+            "price": round(cur_close),          # 整数
+            "threshold": round(cur_threshold),  # 整数
+            "ma20": round(cur_ma),              # 整数
             "status": cur_status,
             "status_since": status_since,
             "deviation": round(deviation, 4) if deviation is not None else None,
+            "vol_ratio": round(vol_ratio, 2) if vol_ratio is not None else None,
+            "range_pct": round(range_pct, 4) if range_pct is not None else None,
             "latest_date": dates[-1],
             "error": None,
         }
     except Exception as e:  # noqa: BLE001
         logger.warning(f"鱼盆模型评估失败 {code}: {e}")
-        return {
-            "code": code, "name": name, "status": None,
-            "deviation": None, "error": str(e),
-        }
+        return {"code": code, "name": name, "category": cat,
+                "status": None, "deviation": None, "error": str(e)}
 
 
-def _assign_strength(results: List[Dict]) -> None:
-    """按偏离率绝对值降序赋趋势强度（1=最强）。失败项不参与排名。"""
+def _assign_strength_and_rankchange(results: List[Dict], prev_rank: Dict[str, int]) -> None:
+    """按偏离率绝对值降序赋趋势强度（1=最强）；并与上次排名对比给出 rank_change。"""
     valid = [r for r in results if r.get("deviation") is not None]
     valid.sort(key=lambda r: abs(r["deviation"]), reverse=True)
     for rank, r in enumerate(valid, start=1):
         r["strength"] = rank
+        old = prev_rank.get(r["code"])
+        # rank_change：上次排名 - 本次排名（正=名次上升）
+        r["rank_change"] = (old - rank) if isinstance(old, int) else None
     for r in results:
         if r.get("deviation") is None:
             r["strength"] = None
+            r["rank_change"] = None
 
 
 def _market_state(results: List[Dict]) -> Dict:
@@ -172,13 +256,20 @@ class FishBasinService:
 
     def _do_eval(self, indices: List[Dict], cache_key: str, buffer_pct: float) -> Dict:
         start = time.time()
+        # 读取上次排名快照（用于排序变化）
+        prev_rank = _cache_get("fish_basin:rank_snapshot") or {}
+
         results: List[Dict] = []
-        for item in indices:  # 串行（V8 非线程安全）
+        for item in indices:  # 串行（akshare/V8 非线程安全）
             results.append(_evaluate_one(item, buffer_pct))
 
-        _assign_strength(results)
+        _assign_strength_and_rankchange(results, prev_rank)
         # 默认按趋势强度升序（1 在前），失败项置后
         results.sort(key=lambda r: (r.get("strength") is None, r.get("strength") or 9999))
+
+        # 保存本次排名快照
+        new_rank = {r["code"]: r["strength"] for r in results if r.get("strength") is not None}
+        _cache_set("fish_basin:rank_snapshot", new_rank, ttl=_SNAPSHOT_TTL)
 
         payload = {
             "results": results,
