@@ -62,6 +62,8 @@ FISH_BASIN_INDICES: List[Dict] = [
 FISH_BASIN_SECTORS: List[Dict] = [
     {"code": "931865", "name": "半导体", "source": "csindex", "sym": "931865", "cat": "科技"},
     {"code": "399975", "name": "证券公司", "source": "sina_index", "sym": "sz399975", "cat": "金融"},
+    {"code": "399986", "name": "中证银行", "source": "sina_index", "sym": "sz399986", "cat": "金融"},
+    {"code": "000986", "name": "石油石化", "source": "sina_index", "sym": "sh000986", "cat": "周期"},
     {"code": "000813", "name": "细分化工", "source": "csindex", "sym": "000813", "cat": "周期"},
     {"code": "399967", "name": "中证军工", "source": "sina_index", "sym": "sz399967", "cat": "科技"},
     {"code": "H30590", "name": "机器人", "source": "csindex", "sym": "H30590", "cat": "科技"},
@@ -72,6 +74,7 @@ FISH_BASIN_SECTORS: List[Dict] = [
     {"code": "931151", "name": "光伏产业", "source": "csindex", "sym": "931151", "cat": "新能源"},
     {"code": "931775", "name": "房地产", "source": "csindex", "sym": "931775", "cat": "周期"},
     {"code": "399932", "name": "中证消费", "source": "sina_index", "sym": "sz399932", "cat": "消费"},
+    {"code": "399971", "name": "中证传媒", "source": "sina_index", "sym": "sz399971", "cat": "传媒"},
     {"code": "399998", "name": "中证煤炭", "source": "sina_index", "sym": "sz399998", "cat": "周期"},
 ]
 
