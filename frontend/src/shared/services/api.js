@@ -132,6 +132,7 @@ class ApiService {
   async runFishBasin(opts = {}) {
     const params = {};
     if (opts.buffer != null) params.buffer = opts.buffer;
+    if (opts.board) params.board = opts.board;
     if (opts.refresh) params.refresh = 1;
     return this.get("/screener/fish-basin", params);
   }

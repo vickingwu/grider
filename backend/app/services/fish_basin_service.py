@@ -56,6 +56,26 @@ FISH_BASIN_INDICES: List[Dict] = [
     {"code": "Ag99.99", "name": "上海银现价", "source": "sge", "sym": "Ag99.99", "cat": "商品"},
 ]
 
+# 板块轮动清单（行业/主题指数；同 20 日线鱼盆逻辑）。
+# 图中同花顺板块(881xxx/886xxx)免费源无数据，改用最接近的中证行业指数；
+# 优先 sina(快)，sina 缺数据的走中证官方接口(csindex)。
+FISH_BASIN_SECTORS: List[Dict] = [
+    {"code": "931865", "name": "半导体", "source": "csindex", "sym": "931865", "cat": "科技"},
+    {"code": "399975", "name": "证券公司", "source": "sina_index", "sym": "sz399975", "cat": "金融"},
+    {"code": "000813", "name": "细分化工", "source": "csindex", "sym": "000813", "cat": "周期"},
+    {"code": "399967", "name": "中证军工", "source": "sina_index", "sym": "sz399967", "cat": "科技"},
+    {"code": "H30590", "name": "机器人", "source": "csindex", "sym": "H30590", "cat": "科技"},
+    {"code": "399395", "name": "有色金属", "source": "sina_index", "sym": "sz399395", "cat": "周期"},
+    {"code": "399989", "name": "中证医疗", "source": "sina_index", "sym": "sz399989", "cat": "医药"},
+    {"code": "000941", "name": "新能源", "source": "csindex", "sym": "000941", "cat": "新能源"},
+    {"code": "399808", "name": "中证新能源", "source": "sina_index", "sym": "sz399808", "cat": "新能源"},
+    {"code": "000922", "name": "中证红利", "source": "csindex", "sym": "000922", "cat": "红利"},
+    {"code": "931151", "name": "光伏产业", "source": "csindex", "sym": "931151", "cat": "新能源"},
+    {"code": "931775", "name": "房地产", "source": "csindex", "sym": "931775", "cat": "周期"},
+    {"code": "399932", "name": "中证消费", "source": "sina_index", "sym": "sz399932", "cat": "消费"},
+    {"code": "399998", "name": "中证煤炭", "source": "sina_index", "sym": "sz399998", "cat": "周期"},
+]
+
 
 def _retry(fn, *args, retries: int = 3, delay: float = 1.2, **kwargs):
     last = None
@@ -230,9 +250,10 @@ class FishBasinService:
     """鱼盆模型批量评估（同步 + 缓存）"""
 
     def evaluate(self, indices: List[Dict] = None, buffer_pct: float = 0.0,
-                 force_refresh: bool = False) -> Dict:
+                 force_refresh: bool = False, board: str = "index") -> Dict:
         indices = indices or FISH_BASIN_INDICES
-        cache_key = f"fish_basin:{_MA_PERIOD}:{buffer_pct}:{len(indices)}"
+        cache_key = f"fish_basin:{board}:{_MA_PERIOD}:{buffer_pct}:{len(indices)}"
+        snap_key = f"fish_basin:rank_snapshot:{board}"
         if not force_refresh:
             cached = _cache_get(cache_key)
             if cached is not None:
@@ -243,7 +264,7 @@ class FishBasinService:
         holder = {}
 
         def _worker():
-            holder["payload"] = self._do_eval(indices, cache_key, buffer_pct)
+            holder["payload"] = self._do_eval(indices, cache_key, snap_key, buffer_pct)
 
         t = threading.Thread(target=_worker, daemon=True)
         t.start()
@@ -254,10 +275,10 @@ class FishBasinService:
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "from_cache": False,
         }
 
-    def _do_eval(self, indices: List[Dict], cache_key: str, buffer_pct: float) -> Dict:
+    def _do_eval(self, indices: List[Dict], cache_key: str, snap_key: str, buffer_pct: float) -> Dict:
         start = time.time()
         # 读取上次排名快照（用于排序变化）
-        prev_rank = _cache_get("fish_basin:rank_snapshot") or {}
+        prev_rank = _cache_get(snap_key) or {}
 
         results: List[Dict] = []
         for item in indices:  # 串行（akshare/V8 非线程安全）
@@ -269,7 +290,7 @@ class FishBasinService:
 
         # 保存本次排名快照
         new_rank = {r["code"]: r["strength"] for r in results if r.get("strength") is not None}
-        _cache_set("fish_basin:rank_snapshot", new_rank, ttl=_SNAPSHOT_TTL)
+        _cache_set(snap_key, new_rank, ttl=_SNAPSHOT_TTL)
 
         payload = {
             "results": results,

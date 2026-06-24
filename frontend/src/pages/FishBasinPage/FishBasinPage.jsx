@@ -34,28 +34,39 @@ const STATE_STYLE = {
 };
 
 export default function FishBasinPage() {
+  const [board, setBoard] = useState("index"); // index=大盘指数, sector=板块轮动
   const [buffer, setBuffer] = useState(0);
-  const [data, setData] = useState(null);
+  const [dataMap, setDataMap] = useState({}); // { index: payload, sector: payload }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const data = dataMap[board] || null;
+
   const load = useCallback(async (opts = {}) => {
+    const b = opts.board || board;
     setLoading(true);
     setError(null);
     try {
-      const resp = await runFishBasin({ buffer, ...opts });
-      setData(resp.data);
+      const resp = await runFishBasin({ buffer, board: b, ...opts });
+      setDataMap((prev) => ({ ...prev, [b]: resp.data }));
     } catch (e) {
       setError(e.message || "加载失败，请稍后重试");
     } finally {
       setLoading(false);
     }
-  }, [buffer]);
+  }, [buffer, board]);
 
+  // 首次加载大盘指数
   useEffect(() => {
-    load();
+    load({ board: "index" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 切换 Tab 时若该板块还没数据则拉取
+  const switchBoard = (b) => {
+    setBoard(b);
+    if (!dataMap[b]) load({ board: b });
+  };
 
   const results = data?.results || [];
   const { sorted, sortKey, sortDir, requestSort } = useSortableData(results, {
@@ -102,6 +113,26 @@ export default function FishBasinPage() {
           </div>
         </div>
 
+        {/* Tab 切换：大盘指数 / 板块轮动 */}
+        <div className="bg-white rounded-xl shadow-lg p-2 flex gap-2">
+          {[
+            { id: "index", label: "大盘指数" },
+            { id: "sector", label: "板块轮动" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => switchBoard(t.id)}
+              className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                board === t.id
+                  ? "bg-sky-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         {/* 市场状态横幅 */}
         {ms && (
           <div className={`bg-gradient-to-r ${style.bg} rounded-xl shadow-lg p-6`}>
@@ -111,7 +142,7 @@ export default function FishBasinPage() {
                 <div>
                   <div className={`text-2xl font-bold ${style.text}`}>{style.label}</div>
                   <div className="text-sm text-gray-600 mt-1">
-                    {ms.total > 0 ? `${ms.yes}/${ms.total} 个指数处于 YES（站上临界值）` : "暂无数据"}
+                    {ms.total > 0 ? `${ms.yes}/${ms.total} 个${board === "sector" ? "板块" : "指数"}处于 YES（站上临界值）` : "暂无数据"}
                   </div>
                 </div>
               </div>

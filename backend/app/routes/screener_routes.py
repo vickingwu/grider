@@ -9,7 +9,7 @@ from flask import Blueprint, request, jsonify
 
 from app.services.screener_service import ScreenerService
 from app.services.ma_screener_service import MAScreenerService
-from app.services.fish_basin_service import FishBasinService, FISH_BASIN_INDICES
+from app.services.fish_basin_service import FishBasinService, FISH_BASIN_INDICES, FISH_BASIN_SECTORS
 from app.constants import (
     SCREENER_CANDIDATES, HTTP_OK, HTTP_INTERNAL_SERVER_ERROR, HTTP_BAD_REQUEST
 )
@@ -98,8 +98,14 @@ def run_fish_basin():
         # 合理区间限制：-5% ~ +5%
         buffer_pct = max(-5.0, min(5.0, buffer_pct))
         force = request.args.get('refresh') in ('1', 'true', 'yes')
+        board = (request.args.get('board', 'index') or 'index').strip().lower()
+        if board == 'sector':
+            indices = FISH_BASIN_SECTORS
+        else:
+            board = 'index'
+            indices = FISH_BASIN_INDICES
         payload = _fish_basin_service.evaluate(
-            FISH_BASIN_INDICES, buffer_pct=buffer_pct, force_refresh=force
+            indices, buffer_pct=buffer_pct, force_refresh=force, board=board
         )
         return jsonify({'success': True, 'data': payload}), HTTP_OK
     except Exception as e:
