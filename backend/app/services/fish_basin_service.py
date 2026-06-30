@@ -75,6 +75,7 @@ FISH_BASIN_SECTORS: List[Dict] = [
     {"code": "931151", "name": "光伏产业", "source": "csindex", "sym": "931151", "cat": "新能源"},
     {"code": "931775", "name": "房地产", "source": "csindex", "sym": "931775", "cat": "周期"},
     {"code": "399932", "name": "中证消费", "source": "sina_index", "sym": "sz399932", "cat": "消费"},
+    {"code": "930633", "name": "中证旅游", "source": "csindex", "sym": "930633", "cat": "消费"},
     {"code": "399971", "name": "中证传媒", "source": "sina_index", "sym": "sz399971", "cat": "传媒"},
     {"code": "399998", "name": "中证煤炭", "source": "sina_index", "sym": "sz399998", "cat": "周期"},
 ]
