@@ -52,8 +52,8 @@ FISH_BASIN_INDICES: List[Dict] = [
     {"code": "HSTECH", "name": "恒生科技", "source": "hk", "sym": "HSTECH", "cat": "港股"},
     {"code": "HSCEI", "name": "国企指数", "source": "hk", "sym": "HSCEI", "cat": "港股"},
     # 商品（上海金交所现货，人民币/克；趋势与伦敦金一致）
-    {"code": "Au99.99", "name": "上海金现价", "source": "sge", "sym": "Au99.99", "cat": "商品"},
-    {"code": "Ag99.99", "name": "上海银现价", "source": "sge", "sym": "Ag99.99", "cat": "商品"},
+    {"code": "GC", "name": "COMEX黄金", "source": "comex", "sym": "GC", "cat": "商品"},
+    {"code": "SI", "name": "COMEX白银", "source": "comex", "sym": "SI", "cat": "商品"},
 ]
 
 # 板块轮动清单（行业/主题指数；同 20 日线鱼盆逻辑）。
@@ -131,6 +131,15 @@ def _fetch_daily(item: Dict) -> Optional[pd.DataFrame]:
             if raw is not None and len(raw):
                 df = raw[["date", "close"]].copy()
                 df["volume"] = 0  # 现货无成交量
+        elif source == "comex":
+            # 外盘期货（COMEX 黄金 GC / 白银 SI），美元计价
+            raw = _retry(ak.futures_foreign_hist, symbol=sym)
+            if raw is not None and len(raw):
+                vol = "volume" if "volume" in raw.columns else None
+                cols = ["date", "close"] + ([vol] if vol else [])
+                df = raw[cols].copy()
+                if not vol:
+                    df["volume"] = 0
         if df is None or len(df) == 0:
             return None
 
