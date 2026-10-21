@@ -217,3 +217,5 @@ __marimo__/
 # Cloudflare Worker
 worker/.wrangler/
 worker/.dev.vars
+# Pyodide 本地包缓存（Node 侧 loadPyodide packageCacheDir）
+frontend/.pyodide-cache/
