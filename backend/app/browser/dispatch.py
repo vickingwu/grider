@@ -81,16 +81,23 @@ def _main(argv: Optional[list] = None) -> int:
     args = parser.parse_args(argv)
 
     from app.browser.testing import install_fixture_hooks
+    from app.services import fish_basin_service
     from app.services.data_service import set_provider_class
     from app.services.providers.browser_market_data import BrowserMarketData
 
     install_fixture_hooks(args.fixtures)
     set_provider_class(BrowserMarketData)
+    # 原生环境装有 akshare；CLI 必须复现在线版取数路径（fixture 驱动、无网络），故显式置空
+    fish_basin_service.ak = None
 
     with open(args.request, "r", encoding="utf-8") as f:
         req = json.load(f)
     body = req.get("body")
-    body_json = json.dumps(body, ensure_ascii=False) if body is not None else None
+    # body 既可为对象（这里序列化），也可为已序列化的 JSON 字符串（原样透传）
+    if body is None or isinstance(body, str):
+        body_json = body
+    else:
+        body_json = json.dumps(body, ensure_ascii=False)
     result = dispatch(req.get("method", "GET"), req["path"], _query_to_string(req.get("query")), body_json)
 
     if hasattr(sys.stdout, "reconfigure"):

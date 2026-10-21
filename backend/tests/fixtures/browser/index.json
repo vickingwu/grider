@@ -1,0 +1,26 @@
+{
+  "captured_at": "2026-10-21",
+  "entries": {
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh510300,day,,,640,": "tx_kline_sh510300_p1.json",
+    "https://qt.gtimg.cn/q=sh510300": "tx_quote_sh510300.txt",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000001,day,,,640,": "tx_kline_sh000001_p1.json",
+    "https://fund.eastmoney.com/pingzhongdata/110011.js": "em_pingzhong_110011.js",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000688,day,,,640,": "tx_kline_sh000688_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sz399006,day,,,640,": "tx_kline_sz399006_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000852,day,,,640,": "tx_kline_sh000852_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000905,day,,,640,": "tx_kline_sh000905_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000510,day,,,640,": "tx_kline_sh000510_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000300,day,,,640,": "tx_kline_sh000300_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000016,day,,,640,": "tx_kline_sh000016_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=bj899050,day,,,640,": "tx_kline_bj899050_p1.json",
+    "https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_k_bj899050=/CN_MarketDataService.getKLineData?symbol=bj899050&scale=240&ma=no&datalen=1970": "sina_kline_bj899050.js",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=usQQQ.OQ,day,,,640,": "tx_kline_usQQQ_OQ_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=usSPY.AM,day,,,640,": "tx_kline_usSPY_AM_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=hkHSI,day,,,640,": "tx_kline_hkHSI_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=hkHSTECH,day,,,640,": "tx_kline_hkHSTECH_p1.json",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=hkHSCEI,day,,,640,": "tx_kline_hkHSCEI_p1.json",
+    "https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_f_GC=/GlobalFuturesService.getGlobalFuturesDailyKLine?symbol=GC": "sina_futures_GC.js",
+    "https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_f_SI=/GlobalFuturesService.getGlobalFuturesDailyKLine?symbol=SI": "sina_futures_SI.js",
+    "https://qt.gtimg.cn/q=sh000688,sz399006,sh000852,sh000905,sh000510,sh000300,sh000016,bj899050,hkHSI,hkHSTECH,hkHSCEI": "tx_quote_fishbasin_index.txt"
+  }
+}

@@ -21,14 +21,31 @@ from typing import Dict, List, Optional, Tuple
 
 from app.services.fish_basin_service import FISH_BASIN_INDICES
 from app.services.providers.browser_fish_basin import (  # history_symbol 内部即 fish_basin_service._qq_symbol
-    futures_url, history_symbol, realtime_quote_url, tencent_page_url,
+    MIN_HISTORY_ROWS, futures_url, history_symbol, realtime_quote_url, sina_kline_url, tencent_page_url,
 )
 from app.services.providers.browser_market_data import HTTP_TIMEOUT_MS, _USER_AGENT
 from app.services.providers.eastmoney import PINGZHONG_URL
-from app.services.providers.tencent import TX_KLINE_URL, TX_QUOTE_URL, to_tencent_symbol
+from app.services.providers.tencent import TX_KLINE_URL, TX_QUOTE_URL, parse_kline_json, to_tencent_symbol
 
 DEFAULT_OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fixtures", "browser")
 _PACE_SECONDS = 0.4
+# 腾讯页 URL → (符号, 新浪 JSONP URL, 文件名)：仅当腾讯正文根数 < MIN_HISTORY_ROWS 时抓取（与运行时回落条件一致）
+_SINA_FALLBACKS: Dict[str, Tuple[str, str, str]] = {}
+
+
+def _needs_sina_fallback(url: str, body: bytes) -> Optional[Tuple[str, str]]:
+    """腾讯 A 股指数页根数不足时返回 (新浪 URL, 文件名)，否则 None。"""
+    fallback = _SINA_FALLBACKS.get(url)
+    if fallback is None:
+        return None
+    symbol, sina_url, filename = fallback
+    try:
+        rows = parse_kline_json(body.decode("utf-8"), symbol, "")
+    except Exception:  # noqa: BLE001  解析失败按“不足”处理，运行时同样会回落
+        rows = []
+    if len(rows) >= MIN_HISTORY_ROWS:
+        return None
+    return sina_url, filename
 
 
 def planned_requests() -> List[Tuple[str, str]]:
@@ -50,6 +67,9 @@ def planned_requests() -> List[Tuple[str, str]]:
         if symbol is None:
             continue  # 腾讯无数据的中证指数（932000）：在线版按“不支持”处理，无需 fixture
         plan.append((tencent_page_url(symbol), f"tx_kline_{symbol.replace('.', '_')}_p1.json"))
+        if source == "sina_index":
+            # 腾讯页不足 MIN_HISTORY_ROWS 根时运行时会回落新浪 JSONP；capture() 据实际正文决定是否抓取
+            _SINA_FALLBACKS[tencent_page_url(symbol)] = (symbol, sina_kline_url(symbol), f"sina_kline_{symbol}.js")
     quote_url = realtime_quote_url(FISH_BASIN_INDICES)
     if quote_url:
         plan.append((quote_url, "tx_quote_fishbasin_index.txt"))
@@ -78,9 +98,9 @@ def capture(out_dir: str, only: Optional[List[str]] = None) -> Dict:
     os.makedirs(out_dir, exist_ok=True)
     entries: Dict[str, str] = {}
     failures: Dict[str, str] = {}
-    for url, filename in planned_requests():
-        if only and not any(o in url for o in only):
-            continue
+    queue: List[Tuple[str, str]] = [(u, n) for u, n in planned_requests() if not only or any(o in u for o in only)]
+    while queue:
+        url, filename = queue.pop(0)
         try:
             body = _fetch_bytes(url)
         except Exception as e:  # noqa: BLE001
@@ -91,6 +111,10 @@ def capture(out_dir: str, only: Optional[List[str]] = None) -> Dict:
             f.write(body)
         entries[url] = filename
         print(f"ok   {filename}  {len(body)} bytes  sha256={hashlib.sha256(body).hexdigest()[:12]}")
+        fallback = _needs_sina_fallback(url, body)
+        if fallback is not None:
+            print(f"     腾讯页不足 {MIN_HISTORY_ROWS} 根，追加新浪 JSONP: {fallback[1]}")
+            queue.insert(0, fallback)
         time.sleep(_PACE_SECONDS)
     index = {"captured_at": date.today().isoformat(), "entries": entries}
     if failures:

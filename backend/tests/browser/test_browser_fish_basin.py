@@ -9,7 +9,7 @@ from app.services.providers import browser_fish_basin as bfb
 from app.services.providers import browser_market_data as bmd
 from app.services.providers.browser_market_data import CN_TZ
 from app.services.providers.errors import UNSUPPORTED_PREFIX, UnsupportedOnlineError
-from app.services.providers.sina_jsonp import SINA_FUTURES_URL, futures_var_name
+from app.services.providers.sina_jsonp import SINA_FUTURES_URL, futures_var_name, sina_var_name
 from app.services.providers.tencent import TX_QUOTE_URL
 from app.utils import concurrency
 from tests.browser.synth import page_body, quote_body, tencent_page_json
@@ -111,12 +111,31 @@ def test_fetch_daily_hk_us_symbol_mapping(recording_hook, after_close):
     hook = recording_hook({
         bfb.tencent_page_url("hkHSTECH"): tencent_page_json("hkHSTECH", rows=30, end=WED, start_price=5000),
         bfb.tencent_page_url("usQQQ.OQ"): tencent_page_json("usQQQ.OQ", rows=30, end=WED, start_price=500),
-        bfb.tencent_page_url("usSPY.N"): tencent_page_json("usSPY.N", rows=30, end=WED, start_price=600),
+        bfb.tencent_page_url("usSPY.AM"): tencent_page_json("usSPY.AM", rows=30, end=WED, start_price=600),
     }).install()
     assert len(bfb.fetch_daily(_item("HSTECH", "hk", "HSTECH"), "a", 1)) == 30
     assert len(bfb.fetch_daily(_item("QQQ", "us", "QQQ"), "b", 1)) == 30
     assert len(bfb.fetch_daily(_item("SPY", "us", "SPY"), "c", 1)) == 30
-    assert set(hook.urls()) == {bfb.tencent_page_url(s) for s in ("hkHSTECH", "usQQQ.OQ", "usSPY.N")}
+    assert set(hook.urls()) == {bfb.tencent_page_url(s) for s in ("hkHSTECH", "usQQQ.OQ", "usSPY.AM")}
+
+
+def test_fetch_daily_sina_index_short_tencent_page_falls_back_to_sina(recording_hook, after_close):
+    """腾讯仅返回 1 根（bj899050 实测）→ 回落新浪 JSONP；根数足够时不触发新浪请求。"""
+    tx_url = bfb.tencent_page_url("bj899050")
+    sina_url = bfb.sina_kline_url("bj899050")
+    var = sina_var_name("bj899050")
+    sina_rows = [{"day": f"2026-09-{d:02d}", "open": "900", "high": "910", "low": "890", "close": str(900 + d),
+                  "volume": str(1000 * d)} for d in range(1, 31)]
+    hook = recording_hook({tx_url: tencent_page_json("bj899050", rows=1, end=WED, start_price=980)},
+                          script_vars={sina_url: {var: sina_rows}}).install()
+    df = bfb.fetch_daily(_item("899050", "sina_index", "bj899050"), "fb_daily:sina_index:bj899050", 1800)
+    assert len(df) == 30 and df["date"].iloc[-1] == "2026-09-30" and df["close"].iloc[-1] == 930
+    assert hook.urls() == [tx_url] and hook.script_calls == [(sina_url, [var], bmd.TTL_SCRIPT)]
+
+    hook = recording_hook({bfb.tencent_page_url("sh000016"):
+                           tencent_page_json("sh000016", rows=bfb.MIN_HISTORY_ROWS, end=WED, start_price=2500)}).install()
+    assert len(bfb.fetch_daily(_item("000016", "sina_index", "sh000016"), "k", 1800)) == bfb.MIN_HISTORY_ROWS
+    assert hook.script_calls == []
 
 
 def test_fetch_daily_comex_via_sina_futures_jsonp(recording_hook, after_close):

@@ -15,14 +15,18 @@ from app.services.providers.browser_market_data import (
     TTL_REALTIME, TTL_SCRIPT, _tencent_get_text, drop_live_bar, fetch_script_vars, http_get_text, latest_page_ttl,
 )
 from app.services.providers.errors import UNSUPPORTED_PREFIX, ProviderError, UnsupportedOnlineError
-from app.services.providers.sina_jsonp import SINA_FUTURES_URL, futures_var_name, parse_sina_futures
+from app.services.providers.sina_jsonp import (
+    SINA_FUTURES_URL, SINA_KLINE_URL, futures_var_name, parse_sina_futures, parse_sina_kline, sina_var_name,
+)
 from app.services.providers.tencent import TX_KLINE_URL, TX_QUOTE_URL, parse_kline_json, parse_quote
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# 美股 ETF 的腾讯符号
-US_TENCENT_SYMBOLS: Dict[str, str] = {"QQQ": "usQQQ.OQ", "SPY": "usSPY.N"}
+# 美股 ETF 的腾讯符号（SPY 在腾讯的市场后缀为 .AM：usSPY.N 仅返回 1 根，2026-10-21 实测）
+US_TENCENT_SYMBOLS: Dict[str, str] = {"QQQ": "usQQQ.OQ", "SPY": "usSPY.AM"}
+# A 股指数腾讯页少于此根数时回落新浪 JSONP（bj899050 腾讯仅返回当日 1 根，2026-10-21 实测）
+MIN_HISTORY_ROWS = 60
 CSINDEX_UNSUPPORTED_MSG = f"{UNSUPPORTED_PREFIX}(中证官网数据浏览器无法直接访问)，请使用本地版"
 GENERIC_UNSUPPORTED_MSG = f"{UNSUPPORTED_PREFIX}，请使用本地版"
 
@@ -37,6 +41,11 @@ def tencent_page_url(symbol: str) -> str:
 def futures_url(sym: str) -> str:
     """COMEX 外盘期货的新浪 JSONP URL。"""
     return SINA_FUTURES_URL.format(var=futures_var_name(sym), sym=sym)
+
+
+def sina_kline_url(symbol: str) -> str:
+    """A 股指数腾讯页不足时的新浪日线 JSONP URL（与 BrowserMarketData 第三跳同一构造）。"""
+    return SINA_KLINE_URL.format(var=sina_var_name(symbol), symbol=symbol)
 
 
 def history_symbol(item: Dict) -> Optional[str]:
@@ -84,6 +93,30 @@ def _tencent_page(symbol: str) -> Optional[pd.DataFrame]:
     })
 
 
+def _sina_page(symbol: str) -> Optional[pd.DataFrame]:
+    """新浪日线 JSONP → DataFrame[date, close, volume]（不复权，与腾讯 fq="" 口径一致）。"""
+    var = sina_var_name(symbol)
+    values = fetch_script_vars(sina_kline_url(symbol), [var], TTL_SCRIPT)
+    df = parse_sina_kline(values.get(var))
+    if df is None or len(df) == 0:
+        return None
+    return df[["date", "close", "volume"]]
+
+
+def _a_share_index_page(symbol: str) -> Optional[pd.DataFrame]:
+    """A 股指数：腾讯页优先；根数不足 MIN_HISTORY_ROWS 时回落新浪 JSONP，新浪也失败则保留腾讯结果。"""
+    df = _tencent_page(symbol)
+    if df is not None and len(df) >= MIN_HISTORY_ROWS:
+        return df
+    logger.warning(f"[fish-basin] 腾讯日线仅 {0 if df is None else len(df)} 根，回落新浪 JSONP: {symbol}")
+    try:
+        fallback = _sina_page(symbol)
+    except ProviderError as e:
+        logger.warning(f"[fish-basin] 新浪 JSONP 回落失败 {symbol}: {e}")
+        return df
+    return fallback if fallback is not None else df
+
+
 def _sina_futures(sym: str) -> Optional[pd.DataFrame]:
     """新浪外盘期货日线 → DataFrame[date, close, volume]。"""
     var = futures_var_name(sym)
@@ -99,7 +132,7 @@ def _load_by_source(item: Dict) -> Tuple[Optional[pd.DataFrame], bool]:
     source = item.get("source")
     sym = str(item.get("sym", "")).strip()
     if source == "sina_index":
-        return _tencent_page(sym), True
+        return _a_share_index_page(sym), True
     if source == "hk":
         return _tencent_page(f"hk{sym}"), False
     if source == "us":
