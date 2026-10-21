@@ -14,15 +14,19 @@
 """
 
 import time
-import threading
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
-import akshare as ak
+
+try:
+    import akshare as ak
+except ImportError:  # 浏览器(Pyodide)在线版无 akshare：取数由 providers.browser_fish_basin 接管
+    ak = None
 
 from app.services.data_service import _cache_get, _cache_set
 from app.algorithms.backtest.ma_engine import calculate_ma
+from app.utils.concurrency import IS_PYODIDE, run_in_worker_thread
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -103,6 +107,10 @@ def _fetch_daily(item: Dict) -> Optional[pd.DataFrame]:
     if cached is not None:
         return pd.DataFrame(cached)
 
+    if ak is None:  # 浏览器在线版：腾讯/新浪 JSONP 取数（providers/browser_fish_basin.py）
+        from app.services.providers.browser_fish_basin import fetch_daily as _browser_fetch_daily
+        return _browser_fetch_daily(item, cache_key, _CACHE_TTL)
+
     df = None
     try:
         if source == "sina_index":
@@ -167,6 +175,12 @@ def _fetch_realtime_maps(indices: List[Dict] = None) -> Dict:
     cached = _cache_get(ck)
     if cached is not None:
         return cached
+
+    if ak is None:  # 浏览器在线版：一次腾讯批量行情替代新浪实时表
+        from app.services.providers.browser_fish_basin import realtime_maps as _browser_realtime_maps
+        maps = _browser_realtime_maps(indices)
+        _cache_set(ck, maps, ttl=60)
+        return maps
 
     maps = {"idx": {}, "hk": {}, "comex": {}}
     # A股指数实时（新浪）
@@ -450,15 +464,8 @@ class FishBasinService:
                 out["from_cache"] = True
                 return out
 
-        holder = {}
-
-        def _worker():
-            holder["payload"] = self._do_eval(indices, cache_key, snap_key, buffer_pct)
-
-        t = threading.Thread(target=_worker, daemon=True)
-        t.start()
-        t.join()
-        return holder.get("payload") or {
+        payload = run_in_worker_thread(lambda: self._do_eval(indices, cache_key, snap_key, buffer_pct))
+        return payload or {
             "results": [], "market_state": _market_state([]),
             "buffer_pct": buffer_pct, "ma_period": _MA_PERIOD,
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "from_cache": False,
@@ -490,6 +497,12 @@ class FishBasinService:
         # 默认按趋势强度升序（1 在前），失败项置后
         results.sort(key=lambda r: (r.get("strength") is None, r.get("strength") or 9999))
 
+        payload_unsupported = None
+        if IS_PYODIDE:  # 在线版：汇总不支持的标的，前端据此提示（本地版无此字段）
+            from app.services.providers.errors import UNSUPPORTED_PREFIX
+            payload_unsupported = [{"code": r["code"], "name": r["name"], "reason": r["error"]}
+                                   for r in results if str(r.get("error") or "").startswith(UNSUPPORTED_PREFIX)]
+
         # 保存"当日最新排名"（带日期），供跨日提升为基线
         new_rank = {r["code"]: r["strength"] for r in results if r.get("strength") is not None}
         _cache_set(snap_key, {"date": today, "rank": new_rank}, ttl=_SNAPSHOT_TTL)
@@ -505,6 +518,8 @@ class FishBasinService:
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "from_cache": False,
         }
+        if payload_unsupported is not None:
+            payload["unsupported"] = payload_unsupported
         # 实时模式：结果缓存缩短到 60 秒（与实时快照同步）
         _cache_set(cache_key, payload, ttl=60)
         ms = payload["market_state"]

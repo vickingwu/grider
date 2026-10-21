@@ -6,14 +6,14 @@
 复用网格筛选器的稳定架构（独立后台线程 + 缓存 + 同步返回），评分调用 run_ma_backtest。
 """
 
+import functools
 import time
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
 
 from app.services.data_service import _cache_get, _cache_set
 from app.services.backtest_service import BacktestService
 from app.services.etf_analysis_service import ETFAnalysisService
+from app.utils.concurrency import map_unordered, run_in_worker_thread
 from app.utils.helper import determine_country
 from app.utils.logger import get_logger
 
@@ -107,18 +107,11 @@ class MAScreenerService:
                 out["from_cache"] = True
                 return out
 
-        holder = {}
-
-        def _worker():
-            holder["payload"] = self._do_screen(
-                candidates, cache_key, period, ma_type, total_capital,
-                start_date, end_date
-            )
-
-        t = threading.Thread(target=_worker, daemon=True)
-        t.start()
-        t.join()
-        return holder.get("payload") or {
+        payload = run_in_worker_thread(lambda: self._do_screen(
+            candidates, cache_key, period, ma_type, total_capital,
+            start_date, end_date
+        ))
+        return payload or {
             "results": [], "total": len(candidates), "succeeded": 0,
             "failed": len(candidates), "elapsed_seconds": None,
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "from_cache": False,
@@ -128,15 +121,10 @@ class MAScreenerService:
                    ma_type: str, total_capital: float,
                    start_date: str = "", end_date: str = "") -> Dict:
         start = time.time()
-        results: List[Dict] = []
-        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
-            future_map = {
-                executor.submit(_evaluate_one, item, period, ma_type, total_capital,
-                                start_date, end_date): item
-                for item in candidates
-            }
-            for future in as_completed(future_map):
-                results.append(future.result())
+        evaluate = functools.partial(_evaluate_one, period=period, ma_type=ma_type,
+                                     total_capital=total_capital,
+                                     start_date=start_date, end_date=end_date)
+        results: List[Dict] = map_unordered(evaluate, candidates, _MAX_WORKERS)
 
         results = _sort_results(results)
         succeeded = sum(1 for r in results if r.get("excess_return") is not None)

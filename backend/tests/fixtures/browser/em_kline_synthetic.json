@@ -1,0 +1,23 @@
+{
+  "_comment": "synthetic — layout cross-checked against the fields2 string (f51..f61 = date,open,close,high,low,volume(手),amount,amplitude,pct,change,turnover) in akshare/stock_feature/stock_hist_em.py of the installed akshare 1.19.1; this IP is banned by push2his.eastmoney.com so no live capture exists",
+  "rc": 0,
+  "rt": 17,
+  "svr": 181669437,
+  "lt": 1,
+  "full": 0,
+  "dlmkts": "",
+  "data": {
+    "code": "510300",
+    "market": 1,
+    "name": "沪深300ETF",
+    "decimal": 3,
+    "dktotal": 3000,
+    "preKPrice": 4.200,
+    "klines": [
+      "2025-10-09,4.631,4.693,4.713,4.627,89709,415842560.00,1.85,1.34,0.062,0.11",
+      "2025-10-10,4.664,4.596,4.671,4.581,117542,543229312.00,1.92,-2.07,-0.097,0.15",
+      "2025-10-13,4.560,4.602,4.615,4.541,98412,450123456.00,1.61,0.13,0.006,0.12",
+      "2025-10-14,4.610,4.577,4.632,4.560,76543,350987654.00,1.56,-0.54,-0.025,0.09"
+    ]
+  }
+}

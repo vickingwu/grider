@@ -1,19 +1,27 @@
 import os
 from flask import Flask, send_from_directory, send_file
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_jwt_extended import JWTManager
-from dotenv import load_dotenv
+
+# 浏览器(Pyodide)在线版不安装 DB/JWT/dotenv 扩展，仅使用 app.browser.create_browser_app；
+# 本地 Flask 模式下这些导入与原来完全一致（扩展均在 requirements.txt 中）。
+try:
+    from flask_sqlalchemy import SQLAlchemy
+    from flask_migrate import Migrate
+    from flask_jwt_extended import JWTManager
+    from dotenv import load_dotenv
+except ImportError:  # 仅在 Pyodide 精简环境触发
+    SQLAlchemy = Migrate = JWTManager = None
+    load_dotenv = None
 
 # 加载环境变量
-load_dotenv()
+if load_dotenv:
+    load_dotenv()
 
 # 导入日志配置
 from app.utils.logger import setup_logger
 
-db = SQLAlchemy()
-migrate = Migrate()
-jwt = JWTManager()
+db = SQLAlchemy() if SQLAlchemy else None
+migrate = Migrate() if Migrate else None
+jwt = JWTManager() if JWTManager else None
 
 def create_app():
 

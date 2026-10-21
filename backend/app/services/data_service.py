@@ -16,7 +16,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-import akshare as ak
+try:
+    import akshare as ak
+except ImportError:  # 浏览器(Pyodide)在线版无 akshare：取数由 providers.browser_market_data 接管
+    ak = None
 
 from app.algorithms.backtest.models import KBar
 from app.utils.helper import parse_otc_marker
@@ -51,7 +54,9 @@ def _patch_requests_default_timeout():
     except Exception as e:  # noqa: BLE001
         logger.warning(f"注入 requests 默认超时失败: {e}")
 
-_patch_requests_default_timeout()
+# 该补丁只服务于 AkShare 的 requests 调用；在线版无 akshare 时跳过，避免启动告警
+if ak is not None:
+    _patch_requests_default_timeout()
 
 
 # 简单的进程内缓存（带 TTL），减少对外部接口的重复请求
@@ -782,3 +787,22 @@ class DataService:
         except ValueError:
             # 已经是紧凑格式或其它
             return value.replace("-", "")
+
+
+# ---------------------------------------------------------------------------
+# 数据服务工厂：本地默认 AkShare 实现；浏览器在线版由 app.browser.bootstrap 注册 DataService 子类
+# ---------------------------------------------------------------------------
+_PROVIDER_CLASS: Optional[type] = None
+
+
+def set_provider_class(cls: Optional[type]) -> None:
+    """注册 DataService 的替代实现（必须是 DataService 子类）；传 None 恢复默认。"""
+    global _PROVIDER_CLASS
+    if cls is not None and not (isinstance(cls, type) and issubclass(cls, DataService)):
+        raise TypeError("provider 必须是 DataService 的子类")
+    _PROVIDER_CLASS = cls
+
+
+def create_data_service() -> "DataService":
+    """构造当前生效的数据服务实例（本地: DataService；浏览器: BrowserMarketData）。"""
+    return (_PROVIDER_CLASS or DataService)()

@@ -9,12 +9,11 @@
 """
 
 import time
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
 
 from app.services.data_service import _cache_get, _cache_set
 from app.services.etf_analysis_service import ETFAnalysisService
+from app.utils.concurrency import map_unordered, run_in_worker_thread
 from app.utils.helper import determine_country
 from app.utils.logger import get_logger
 
@@ -103,18 +102,11 @@ class ScreenerService:
                 out["from_cache"] = True
                 return out
 
-        # 在独立后台线程中运行评分。
+        # 在独立后台线程中运行评分（Pyodide 下退化为同步调用）。
         # 原因：若直接在 werkzeug 的请求工作线程里再开 ThreadPoolExecutor，
         # 嵌套线程 + akshare/pandas 在某些标的上会发生死锁；放到独立线程可规避。
-        holder = {}
-
-        def _worker():
-            holder["payload"] = self._do_screen(candidates, cache_key)
-
-        t = threading.Thread(target=_worker, daemon=True)
-        t.start()
-        t.join()
-        return holder.get("payload") or {
+        payload = run_in_worker_thread(lambda: self._do_screen(candidates, cache_key))
+        return payload or {
             "results": [], "total": len(candidates), "succeeded": 0,
             "failed": len(candidates), "elapsed_seconds": None,
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "from_cache": False,
@@ -123,11 +115,7 @@ class ScreenerService:
     def _do_screen(self, candidates: List[Dict], cache_key: str) -> Dict:
         """实际执行批量评分（在独立线程中调用）。"""
         start = time.time()
-        results: List[Dict] = []
-        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
-            future_map = {executor.submit(_evaluate_one, item): item for item in candidates}
-            for future in as_completed(future_map):
-                results.append(future.result())
+        results: List[Dict] = map_unordered(_evaluate_one, candidates, _MAX_WORKERS)
 
         results = _sort_results(results)
         succeeded = sum(1 for r in results if r.get("total_score") is not None)

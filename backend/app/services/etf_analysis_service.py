@@ -13,7 +13,7 @@ from app.algorithms.atr.calculator import ATRCalculator
 from app.algorithms.grid.arithmetic_grid import ArithmeticGridCalculator
 from app.algorithms.grid.geometric_grid import GeometricGridCalculator
 from app.algorithms.grid.optimizer import GridOptimizer
-from .data_service import DataService
+from .data_service import DataService, create_data_service
 from .suitability_analyzer import SuitabilityAnalyzer
 
 
@@ -39,7 +39,7 @@ class ETFAnalysisService:
             grid_optimizer: 网格优化器实例
             suitability_analyzer: 适宜度分析器实例
         """
-        self.data_client = DataService()
+        self.data_client = create_data_service()
 
         self.country = country or 'CHN'
         

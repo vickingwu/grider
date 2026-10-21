@@ -12,7 +12,7 @@ from app.algorithms.backtest.metrics import MetricsCalculator
 from app.algorithms.backtest.models import BacktestConfig
 from app.algorithms.backtest.fee_calculator import FeeCalculator
 from app.algorithms.grid.optimizer import GridOptimizer
-from app.services.data_service import DataService
+from app.services.data_service import DataService, create_data_service
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -22,7 +22,7 @@ class BacktestService:
     """回测业务服务"""
 
     def __init__(self):
-        self.data_service = DataService()
+        self.data_service = create_data_service()
 
     def run_backtest(self, etf_code: str, exchange_code: str, grid_strategy: dict,
                      backtest_config: Optional[dict] = None, type: str = 'STOCK',

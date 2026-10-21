@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from app.services.etf_analysis_service import ETFAnalysisService
-from app.services.data_service import DataService
+from app.services.data_service import DataService, create_data_service
 from app.constants import (
     HTTP_OK, HTTP_BAD_REQUEST, HTTP_NOT_FOUND, HTTP_INTERNAL_SERVER_ERROR,
     ETF_POPULAR_LIST, CAPITAL_PRESETS
@@ -12,7 +12,7 @@ from app.utils.helper import resolve_ticker
 logger = get_logger(__name__)
 bp = Blueprint('info_routes', __name__)
 
-_data_service = DataService()
+_data_service = create_data_service()
 
 
 @bp.route('/popular', methods=['GET'])
