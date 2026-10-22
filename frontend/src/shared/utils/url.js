@@ -3,6 +3,7 @@
  * 处理分析页面的URL参数编码、解码和验证
  */
 import { validateETFCode } from "./validation";
+import { getBaseUrl, joinBase } from "./base";
 
 // 参数映射表 - 中文到英文的映射
 export const PARAM_MAPPINGS = {
@@ -183,16 +184,24 @@ export const validateAndCompleteParams = (params) => {
 };
 
 /**
- * 生成分析页面URL
+ * 生成分析页面的路由路径（相对路由 basename，供 navigate 使用）
+ * @param {string} etfCode - ETF代码
+ * @param {Object} params - 分析参数
+ * @returns {string} 如 "/analysis/510300?capital=100000&grid=geometric"
+ */
+export const generateAnalysisPath = (etfCode, params) => {
+  const searchParams = encodeAnalysisParams(params);
+  return `/analysis/${etfCode}?${searchParams.toString()}`;
+};
+
+/**
+ * 生成分析页面URL（含站点基路径，供分享/历史记录使用）
  * @param {string} etfCode - ETF代码
  * @param {Object} params - 分析参数
  * @returns {string} 完整的分析页面URL
  */
-export const generateAnalysisURL = (etfCode, params) => {
-  const searchParams = encodeAnalysisParams(params);
-  const baseUrl = `${window.location.origin}/analysis/${etfCode}`;
-  return `${baseUrl}?${searchParams.toString()}`;
-};
+export const generateAnalysisURL = (etfCode, params) =>
+  `${window.location.origin}${joinBase(getBaseUrl(), generateAnalysisPath(etfCode, params))}`;
 
 /**
  * 解析当前URL获取分析参数

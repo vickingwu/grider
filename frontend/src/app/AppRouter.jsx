@@ -12,14 +12,16 @@ import MAScreenerPage from "@pages/MAScreenerPage";
 import MAComparePage from "@pages/MAComparePage";
 import GridComparePage from "@pages/GridComparePage";
 import FishBasinPage from "@pages/FishBasinPage";
+import { getBaseUrl } from "@shared/utils/base";
 
 /**
  * 应用路由配置组件
  * 负责管理应用的所有路由
+ * basename 取自构建基路径（http 构建为 ''，Pages 构建为 '/grider'）
  */
 export default function AppRouter() {
   return (
-    <Router>
+    <Router basename={getBaseUrl().replace(/\/$/, "")}>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/screener" element={<ScreenerPage />} />

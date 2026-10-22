@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### :sparkles: New Features
+- GitHub Pages 在线版（https://vickingwu.github.io/grider/）：通过 Pyodide 在浏览器中运行原 Python 分析引擎（Flask 路由、校验、服务与算法代码不变），数据层改为腾讯财经 / 东方财富 / 新浪公开接口；本地 Flask 运行方式不受影响
+
+### :wrench: Chores
+- 新增 Pages 构建脚本（`npm run build:pages`：后端打包为 zip、锁定 wheel、classic worker、404 深链接回退、本地 Pages 预览服务器）与 `.github/workflows/pages.yml` 部署工作流
+
 ## [1.3.2] - 2025-11-19
 ### :sparkles: New Features
 - [`974bfc8`](https://github.com/jorben/grider/commit/974bfc81c884a58bec0293d8f4700dcc92e46a26) - 移除评论组件并更新版本号显示 *(commit by [@jorben](https://github.com/jorben))*

@@ -196,6 +196,11 @@ export default function FishBasinPage() {
           {error && (
             <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
           )}
+          {data?.unsupported?.length > 0 && (
+            <div data-testid="fish-basin-unsupported" className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              在线版暂不支持以下标的（数据源为中证官网，浏览器无法直接访问）：{data.unsupported.map((u) => u.name || u.code).join("、")}。如需完整结果请使用本地版。
+            </div>
+          )}
         </div>
 
         {/* 表格 */}
@@ -250,7 +255,7 @@ export default function FishBasinPage() {
                         {r.status === "NO" && (
                           <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold">NO</span>
                         )}
-                        {!r.status && <span className="text-gray-400 text-xs">失败</span>}
+                        {!r.status && <span className="text-gray-400 text-xs" title={r.error || undefined}>失败</span>}
                       </td>
                       <td className="py-2 px-2 text-gray-500 whitespace-nowrap">{r.status_since || "—"}</td>
                       <td className={`py-2 px-2 text-left ${

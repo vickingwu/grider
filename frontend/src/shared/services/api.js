@@ -3,6 +3,8 @@
  * 处理与后端的所有HTTP通信
  */
 
+import { apiFetch } from "./transport";
+
 const API_BASE_URL = "/api";
 
 class ApiService {
@@ -25,7 +27,7 @@ class ApiService {
     };
 
     try {
-      const response = await fetch(url, config);
+      const response = await apiFetch(url, config);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

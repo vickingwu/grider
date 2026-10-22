@@ -4,6 +4,10 @@
     "es2021": true,
     "jest": true
   },
+  "globals": {
+    "__GRIDER_ENGINE__": "readonly",
+    "__GRIDER_BUILD_SHA__": "readonly"
+  },
   "extends": [
     "eslint:recommended",
     "plugin:react/recommended",

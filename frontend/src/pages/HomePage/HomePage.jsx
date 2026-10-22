@@ -1,10 +1,10 @@
 import React from "react";
 import { Helmet } from "react-helmet-async";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Filter, LineChart, GitCompare, Waves } from "lucide-react";
 import ParameterForm from "@features/analysis/components/ParameterForm";
 import AnalysisHistory from "@features/history/components/AnalysisHistory";
-import { generateAnalysisURL } from "@shared/utils/url";
+import { generateAnalysisPath } from "@shared/utils/url";
 
 /**
  * 首页组件
@@ -12,10 +12,11 @@ import { generateAnalysisURL } from "@shared/utils/url";
  * 已移除顶部介绍区(HeroSection)，直接显示策略参数设置
  */
 export default function HomePage() {
-  // 处理分析请求 - 跳转到分析页面
+  const navigate = useNavigate();
+
+  // 处理分析请求 - 客户端路由跳转到分析页面（整页刷新会让在线版重新加载引擎）
   const handleAnalysis = async (parameters) => {
-    const analysisUrl = generateAnalysisURL(parameters.etfCode, parameters);
-    window.location.href = analysisUrl;
+    navigate(generateAnalysisPath(parameters.etfCode, parameters));
   };
 
   return (

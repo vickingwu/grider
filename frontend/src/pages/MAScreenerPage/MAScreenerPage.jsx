@@ -11,6 +11,10 @@ import {
 import { runMAScreener } from "@shared/services/api";
 import { useSortableData } from "@shared/hooks";
 import { SortableTh } from "@shared/components/ui";
+import { getBaseUrl, joinBase } from "@shared/utils/base";
+
+// 在线版（Pyodide）在当前标签页打开，避免每个新标签页重新加载一份引擎；本地版保持新标签页
+const OPEN_IN_NEW_TAB = __GRIDER_ENGINE__ !== 'pyodide';
 
 const CATEGORIES = ["全部", "宽基指数", "行业主题", "红利价值", "跨境海外", "商品能源"];
 const PRESET_PERIODS = [5, 15, 20, 50, 99, 128, 225];
@@ -296,9 +300,9 @@ export default function MAScreenerPage() {
                       )}
                       <td className="py-3 px-2">
                         <a
-                          href={`/ma-backtest?code=${r.code}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          href={joinBase(getBaseUrl(), `ma-backtest?code=${r.code}`)}
+                          target={OPEN_IN_NEW_TAB ? "_blank" : undefined}
+                          rel={OPEN_IN_NEW_TAB ? "noopener noreferrer" : undefined}
                           className="text-indigo-600 hover:text-indigo-700 text-xs whitespace-nowrap"
                         >
                           more

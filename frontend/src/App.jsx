@@ -1,8 +1,11 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { HelmetProvider } from "react-helmet-async";
 import AppRouter from "./app/AppRouter";
 import AppLayout from "./app/AppLayout";
 import "./App.css";
+
+// 仅在线（Pyodide）构建挂载引擎状态横幅；http 构建中该分支与其动态 import 一同被摇掉
+const EngineGate = __GRIDER_ENGINE__ === 'pyodide' ? React.lazy(() => import('./app/EngineGate.jsx')) : null;
 
 /**
  * 主应用组件 - 简化版本
@@ -12,6 +15,11 @@ function App() {
   return (
     <HelmetProvider>
       <AppLayout>
+        {EngineGate && (
+          <Suspense fallback={null}>
+            <EngineGate />
+          </Suspense>
+        )}
         <AppRouter />
       </AppLayout>
     </HelmetProvider>

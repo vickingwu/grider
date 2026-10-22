@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Settings } from "lucide-react";
 import { usePersistedState } from "@shared/hooks";
+import { apiFetch } from "@shared/services/transport";
 import { validateETFCode, validateCapital } from "@shared/utils/validation";
 import { checkDisclaimerStatus, acceptDisclaimer } from "@shared/utils/disclaimer";
 import ETFSelector from "@features/etf/components/ETFSelector";
@@ -94,7 +95,7 @@ const ParameterForm = ({ onAnalysis, loading, initialValues }) => {
 
   // 获取热门ETF列表
   useEffect(() => {
-    fetch("/api/info/popular")
+    apiFetch("/api/info/popular")
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
@@ -106,7 +107,7 @@ const ParameterForm = ({ onAnalysis, loading, initialValues }) => {
 
   // 获取资金预设
   useEffect(() => {
-    fetch("/api/info/capital")
+    apiFetch("/api/info/capital")
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
@@ -122,7 +123,7 @@ const ParameterForm = ({ onAnalysis, loading, initialValues }) => {
       setEtfLoading(true);
       setEtfInfo(null);
 
-      fetch(`/api/info/${etfCode}`)
+      apiFetch(`/api/info/${etfCode}`)
         .then((res) => res.json())
         .then((data) => {
           if (data.success) {
