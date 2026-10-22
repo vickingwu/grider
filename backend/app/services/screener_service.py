@@ -8,6 +8,7 @@
 因此采用同步接口直接返回；结果整体缓存 1 小时，二次请求秒出。
 """
 
+import math
 import time
 from typing import Dict, List
 
@@ -23,6 +24,14 @@ logger = get_logger(__name__)
 _MAX_WORKERS = 4
 # 整体结果缓存（秒）
 _SCREENER_CACHE_TTL = 3600
+# 历史行数过少时波动率/ATR/ADX 为 NaN，json.dumps 会输出裸 NaN 导致前端 JSON.parse 失败
+_INSUFFICIENT_HISTORY_MESSAGE = "历史数据不足（数据源返回行数过少）"
+
+
+def _ensure_finite(*values: float) -> None:
+    """任一指标非有限数（NaN/Inf）即判定为历史数据不足。"""
+    if not all(math.isfinite(float(v)) for v in values):
+        raise ValueError(_INSUFFICIENT_HISTORY_MESSAGE)
 
 
 def _evaluate_one(item: Dict) -> Dict:
@@ -40,6 +49,8 @@ def _evaluate_one(item: Dict) -> Dict:
 
         evals = result["evaluations"]
         indicators = result["market_indicators"]
+        _ensure_finite(evals["amplitude"]["atr_pct"], evals["volatility"]["volatility_pct"],
+                       indicators["adx_value"], indicators["avg_amount"])
         return {
             "code": code,
             "name": etf_info.get("name") or name,
