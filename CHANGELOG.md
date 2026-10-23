@@ -8,8 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### :sparkles: New Features
 - GitHub Pages 在线版（https://vickingwu.github.io/grider/）：通过 Pyodide 在浏览器中运行原 Python 分析引擎（Flask 路由、校验、服务与算法代码不变），数据层改为腾讯财经 / 东方财富 / 新浪公开接口；本地 Flask 运行方式不受影响
 
+### :bug: Bug Fixes
+- 鱼盆模型：93xxxx / H30xxx 行业指数与中证 2000（932000）在线版接入东方财富日线，板块轮动与大盘看板不再出现「失败」行
+- 鱼盆模型：腾讯日线返回空页时重试并驱逐浏览器缓存，仍失败的行显示「数据源繁忙，请稍后刷新」
+
 ### :wrench: Chores
 - 新增 Pages 构建脚本（`npm run build:pages`：后端打包为 zip、锁定 wheel、classic worker、404 深链接回退、本地 Pages 预览服务器）与 `.github/workflows/pages.yml` 部署工作流
+- 在线版去掉就绪横幅，精简加载 / 错误文案
 
 ## [1.3.2] - 2025-11-19
 ### :sparkles: New Features

@@ -300,7 +300,8 @@ async function waitWithProgress(fn, { stallMs, capMs, what }) {
  * @returns {Promise<object>} window.__griderEngine 快照
  */
 async function waitForEngine(page) {
-  await page.waitForSelector('[data-engine-status]', { timeout: UI_WAIT_MS });
+  await page.waitForSelector('[data-engine-status]', { state: 'attached', timeout: UI_WAIT_MS });
+  let lastLoadingBanner = '';
   await waitWithProgress(async () => {
     const snap = await page.evaluate(() => {
       const el = document.querySelector('[data-engine-status]');
@@ -314,12 +315,14 @@ async function waitForEngine(page) {
       };
     });
     if (snap.status === 'error') throw new Error(`引擎初始化失败：${snap.error || snap.banner}`);
+    if (snap.status === 'loading' && snap.banner) lastLoadingBanner = snap.banner;
     return { done: snap.status === 'ready', progressKey: `${snap.stage}:${snap.bytes}`, detail: snap.banner };
   }, { stallMs: INIT_STALL_MS, capMs: INIT_CAP_MS, what: '引擎加载' });
-  return page.evaluate(() => {
+  const snapshot = await page.evaluate(() => {
     const e = window.__griderEngine;
     return { status: e.status, stage: e.stage, elapsedMs: e.elapsedMs, transferBytes: e.transferBytes, info: e.info };
   });
+  return { ...snapshot, lastLoadingBanner };
 }
 
 /**
@@ -411,7 +414,13 @@ async function step1Engine(page, cdnBytes) {
   const engine = await waitForEngine(page);
   report.engine = { ...engine, wallMs: Date.now() - t0, playwrightCdnBytes: cdnBytes(), cdnMode: report.cdnMode };
   check('1', '引擎就绪（data-engine-status=ready）', engine.status === 'ready',
-    `worker elapsedMs=${engine.elapsedMs} transferBytes=${engine.transferBytes} · Playwright request.sizes(cdn.jsdelivr.net)=${cdnBytes()} B · wall=${report.engine.wallMs} ms · cdnMode=${report.cdnMode} · info=${JSON.stringify(engine.info)}`);
+    `worker elapsedMs=${engine.elapsedMs} transferBytes=${engine.transferBytes} · Playwright request.sizes(cdn.jsdelivr.net)=${cdnBytes()} B · wall=${report.engine.wallMs} ms · cdnMode=${report.cdnMode} · lastLoadingBanner=${JSON.stringify(engine.lastLoadingBanner)} · info=${JSON.stringify(engine.info)}`);
+  const banner = await page.evaluate(() => {
+    const el = document.querySelector('[data-engine-status="ready"]');
+    return { exists: Boolean(el), text: el ? el.textContent : null, bodyHasReady: document.body.innerText.includes('已就绪') };
+  });
+  check('1', '就绪后无可见横幅', banner.exists && banner.text === '' && !banner.bodyHasReady,
+    `ready span exists=${banner.exists} textContent=${JSON.stringify(banner.text)} body 含「已就绪」=${banner.bodyHasReady}`);
 }
 
 /**
