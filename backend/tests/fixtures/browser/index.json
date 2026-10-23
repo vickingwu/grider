@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-10-21",
+  "captured_at": "2026-10-23",
   "entries": {
     "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh510300,day,,,640,": "tx_kline_sh510300_p1.json",
     "https://qt.gtimg.cn/q=sh510300": "tx_quote_sh510300.txt",
@@ -22,5 +22,8 @@
     "https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_f_GC=/GlobalFuturesService.getGlobalFuturesDailyKLine?symbol=GC": "sina_futures_GC.js",
     "https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_f_SI=/GlobalFuturesService.getGlobalFuturesDailyKLine?symbol=SI": "sina_futures_SI.js",
     "https://qt.gtimg.cn/q=sh000688,sz399006,sh000852,sh000905,sh000510,sh000300,sh000016,bj899050,hkHSI,hkHSTECH,hkHSCEI": "tx_quote_fishbasin_index.txt"
+  },
+  "failures": {
+    "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=2.932000&klt=101&fqt=0&end=20500101&lmt=640&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61": "ConnectionError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
   }
 }

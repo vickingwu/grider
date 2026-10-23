@@ -10,7 +10,8 @@
  * - 递归删除易变键 VOLATILE_KEYS
  * - 数值：若最近的外层键在 ROUNDED_KEYS 中（后端用 round(x, n) 输出），absTol = 0.5 × 10^-n；
  *   其余数值 relTol 1e-6 / absTol 1e-9（wasm 与 x86 的浮点求和顺序差异可能翻转 round 的进位）
- * - fish-basin：Pyodide 载荷必须有 unsupported == [{code:'932000', …}]，原生载荷无 unsupported 键，其余相同
+ * - fish-basin：Pyodide 载荷必须有 unsupported == []（932000 中证2000 改走东财 push2his fixture），原生载荷无
+ *   unsupported 键；932000 行两侧一致：status ∈ {YES,NO}，或 fixture 抓取失败时 error === '数据源繁忙，请稍后刷新'
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -33,7 +34,8 @@ const FIXTURE_MAX_AGE_DAYS = 10;
 const MS_PER_DAY = 86_400_000;
 const REL_TOL = 1e-6;
 const ABS_TOL = 1e-9;
-const UNSUPPORTED_CODE = '932000';
+const EM_FALLBACK_CODE = '932000';
+const BUSY_MESSAGE = '数据源繁忙，请稍后刷新';
 
 /**
  * 两侧都会变化、与算法无关的键（递归删除）。design §11.3 列出前五个；
@@ -284,10 +286,18 @@ describe('dispatch parity: Pyodide vs native Flask', () => {
     const pyData = stripVolatile(pyodide.body.data);
     const nativeData = stripVolatile(native.body.data);
     assert.ok(Array.isArray(pyData.unsupported), 'Pyodide 载荷缺少 unsupported[]');
-    assert.deepEqual(pyData.unsupported.map((u) => u.code), [UNSUPPORTED_CODE]);
-    assert.ok(pyData.unsupported[0].reason && pyData.unsupported[0].name, 'unsupported 条目缺少 name/reason');
+    assert.deepEqual(pyData.unsupported, [], `Pyodide 载荷 unsupported 应为空: ${JSON.stringify(pyData.unsupported)}`);
     assert.equal('unsupported' in nativeData, false, '原生载荷不应有 unsupported 键');
     delete pyData.unsupported;
+
+    const pyRow = pyData.results.find((r) => r.code === EM_FALLBACK_CODE);
+    const nativeRow = nativeData.results.find((r) => r.code === EM_FALLBACK_CODE);
+    assert.ok(pyRow && nativeRow, `缺少 ${EM_FALLBACK_CODE} 行`);
+    const emOk = (row) => row.status === 'YES' || row.status === 'NO';
+    const emBusy = (row) => row.status === null && row.error === BUSY_MESSAGE;
+    assert.ok(emOk(pyRow) || emBusy(pyRow), `${EM_FALLBACK_CODE} 行应为 YES/NO 或繁忙: ${JSON.stringify(pyRow)}`);
+    assert.equal(emOk(pyRow), emOk(nativeRow), `${EM_FALLBACK_CODE} 行两侧状态类别不一致`);
+    if (emBusy(pyRow)) console.error(`[parity] ${EM_FALLBACK_CODE} 东财 fixture 缺失，两侧均为「${BUSY_MESSAGE}」`);
 
     assert.ok(nativeData.results.length >= 12, `fish-basin 结果过少: ${nativeData.results.length}`);
     assertDeepClose(pyData, nativeData, FISH_BASIN_ROUNDED_KEYS);

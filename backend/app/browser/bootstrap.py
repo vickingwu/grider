@@ -3,6 +3,7 @@
 bridge 为 JS 对象（Pyodide 的 JsProxy），需提供：
 - httpGetBytes(url, timeoutMs, ttlSeconds) -> Uint8Array（非 200/网络错误/超时抛 JS 异常）
 - loadScriptVars(url, namesJson, ttlSeconds) -> JSON 字符串 {name: value}
+- evictCache(url) -> bool（可选：驱逐该 URL 的 Map/IndexedDB 缓存，供空页重试前调用）
 
 本模块不导入 pyodide（原生可导入，供 import-hygiene 测试与 CLI 使用）；JS 异常作为普通 Exception
 被包装为 ProviderError。init 幂等：二次调用直接返回首次结果。
@@ -73,6 +74,9 @@ def init(bridge: Any) -> str:
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr, format="%(levelname)s %(name)s: %(message)s")
     bmd.set_http_get_text(_make_http_get_text(bridge))
     bmd.set_fetch_script_vars(_make_fetch_script_vars(bridge))
+    evict = getattr(bridge, "evictCache", None)  # 旧 worker 无此方法时保持 no-op
+    if evict is not None:
+        bmd.set_cache_evict(lambda url: evict(url))
     set_provider_class(BrowserMarketData)
     _rebind_info_routes()
 

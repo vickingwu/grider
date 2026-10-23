@@ -205,5 +205,5 @@ def test_parse_sina_kline_and_futures():
 # ---------------------------------------------------------------- errors
 def test_error_types():
     assert issubclass(UnsupportedOnlineError, ValueError)
-    assert str(UnsupportedOnlineError(f"{UNSUPPORTED_PREFIX}，请使用本地版")).startswith("在线版暂不支持")
+    assert str(UnsupportedOnlineError(UNSUPPORTED_PREFIX)).startswith("在线版暂不支持")
     assert not issubclass(ProviderError, ValueError)

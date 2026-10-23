@@ -5,6 +5,7 @@ get_5min_kline / get_trading_calendar）全部继承。网络经两个可注入�
 
 - http_get_text(url, encoding, ttl)       -> str            （腾讯 kline/行情、东财 push2his）
 - fetch_script_vars(url, names, ttl)      -> {name: value}  （无 CORS 的脚本源：pingzhongdata、新浪 JSONP）
+- cache_evict(url)                        -> None           （重试前驱逐浏览器侧按 URL 缓存的空页/坏页；原生 no-op）
 
 本地默认实现用 requests（仅在函数内部导入）；worker 内由 app.browser.bootstrap 注入 JS 桥实现。
 缓存 TTL 由调用方按用途选择（实时行情 0、名称 1 天、最新页按 15:05 收口、历史页 7 天、脚本 1 小时）。
@@ -42,9 +43,9 @@ TTL_LATEST_PAGE = 3600      # 腾讯 end="" 最新页上限（与本地 1 小时
 TTL_FIXED_PAGE = 7 * 86400  # 腾讯固定 end 的不复权历史页（不可变）
 TTL_SCRIPT = 3600           # pingzhongdata / 新浪 JSONP / 东财 push2his
 HTTP_TIMEOUT_MS = 12000     # 与 data_service._DEFAULT_HTTP_TIMEOUT 一致
-TX_RETRIES = 2              # 腾讯单页总尝试次数
-TX_RETRY_DELAY = 0.5        # 腾讯重试间隔(秒)
-TX_MIN_INTERVAL = 0.15      # 腾讯翻页节流(秒)
+TX_RETRIES = 3              # 腾讯单页总尝试次数（含空页重试）
+TX_BACKOFF = (0.8, 1.6)     # 第 n 次失败后的退避(秒)：TX_BACKOFF[min(n-1, len-1)]
+TX_MIN_INTERVAL = 0.15      # 腾讯请求节流(秒)：翻页与鱼盆单页均在请求前调用 _pace("tencent")
 EM_MIN_INTERVAL = 2.0       # 东财兜底节流(秒)
 CN_TZ = timezone(timedelta(hours=8))
 SESSION_SETTLED = dtime(15, 5)  # A 股日线在新浪侧收口的时刻（北京时间）
@@ -52,6 +53,7 @@ _MAX_PAGES = 60                 # 翻页保险丝（60 页 ≈ 150 年）
 
 HttpGetText = Callable[[str, Optional[str], int], str]
 FetchScriptVars = Callable[[str, List[str], int], Dict[str, Any]]
+CacheEvict = Callable[[str], Any]
 
 _USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
@@ -70,6 +72,7 @@ def _now_cn() -> datetime:
 # ---------------------------------------------------------------------------
 _http_get_text_hook: Optional[HttpGetText] = None
 _fetch_script_vars_hook: Optional[FetchScriptVars] = None
+_cache_evict_hook: Optional[CacheEvict] = None
 
 
 def _requests_get_text(url: str, encoding: Optional[str], ttl: int) -> str:
@@ -113,6 +116,30 @@ def set_fetch_script_vars(fn: Optional[FetchScriptVars]) -> None:
     """注入 fetch_script_vars 实现；None 恢复 requests 默认。"""
     global _fetch_script_vars_hook
     _fetch_script_vars_hook = fn
+
+
+def set_cache_evict(fn: Optional[CacheEvict]) -> None:
+    """注入 cache_evict 实现；None 恢复默认 no-op（原生无浏览器侧缓存）。"""
+    global _cache_evict_hook
+    _cache_evict_hook = fn
+
+
+def cache_evict(url: str) -> None:
+    """驱逐浏览器侧按 URL 缓存的响应（空页/坏页重试前调用）；任何异常只记 debug，绝不影响取数流程。"""
+    fn = _cache_evict_hook
+    if fn is None:
+        return
+    try:
+        fn(url)
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"cache_evict 失败 {url}: {e}")
+
+
+def _backoff_sleep(failures: int) -> None:
+    """第 failures 次失败后按 TX_BACKOFF 退避。"""
+    delay = TX_BACKOFF[min(failures - 1, len(TX_BACKOFF) - 1)] if TX_BACKOFF else 0
+    if delay > 0:
+        time.sleep(delay)
 
 
 def http_get_text(url: str, encoding: Optional[str], ttl: int) -> str:
@@ -187,15 +214,16 @@ def _pace(source: str, min_interval: float) -> None:
 
 
 def _tencent_get_text(url: str, encoding: Optional[str], ttl: int) -> str:
-    """腾讯请求：最多 TX_RETRIES 次尝试，间隔 TX_RETRY_DELAY。"""
+    """腾讯请求：最多 TX_RETRIES 次尝试；每次 ProviderError 后驱逐该 URL 的浏览器缓存并按 TX_BACKOFF 退避。"""
     last_err: Optional[ProviderError] = None
     for attempt in range(1, TX_RETRIES + 1):
         try:
             return http_get_text(url, encoding, ttl)
         except ProviderError as e:
             last_err = e
-            if attempt < TX_RETRIES and TX_RETRY_DELAY > 0:
-                time.sleep(TX_RETRY_DELAY)
+            cache_evict(url)
+            if attempt < TX_RETRIES:
+                _backoff_sleep(attempt)
     raise last_err or ProviderError("腾讯请求失败")
 
 
@@ -221,6 +249,7 @@ def load_history_pages(http_get_text_fn: HttpGetText, symbol: str, fq: str, sinc
     complete = False
     for _ in range(_MAX_PAGES):
         url = TX_KLINE_URL.format(symbol=symbol, start="", end=end, fq=fq)
+        _pace("tencent", TX_MIN_INTERVAL)
         page = parse_kline_json(http_get_text_fn(url, None, _page_ttl(end, fq, now)), symbol, fq)
         if not page:
             complete = True
@@ -236,7 +265,6 @@ def load_history_pages(http_get_text_fn: HttpGetText, symbol: str, fq: str, sinc
         if end and next_end >= end:  # 无进展，防止死循环
             break
         end = next_end
-        _pace("tencent", TX_MIN_INTERVAL)
     return _dedupe_rows(rows), complete
 
 

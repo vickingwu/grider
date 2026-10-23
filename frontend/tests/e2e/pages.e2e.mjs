@@ -37,14 +37,15 @@ const UI_WAIT_MS = 30_000;
 const PROBE_WAIT_MS = 240_000;
 const CDN_PROBE_MS = 15_000;
 const POLL_MS = 1_000;
-const MIN_INDEX_ROWS = 12;
-const MIN_SECTOR_ROWS = 10;
+const MIN_INDEX_ROWS = 15;
+const MIN_SECTOR_ROWS = 11;
 const MIN_SCREENER_ROWS = 40;
 const ETF_CODE = '510300';
-const UNSUPPORTED_INDEX_CODE = '932000';
-const UNSUPPORTED_INDEX_NAME = '中证2000';
-const UNSUPPORTED_PREFIX = '在线版暂不支持';
-const SECTOR_UNSUPPORTED_NAMES = ['半导体', '航空航天', '机器人', '创新药', '中证中药', '光伏产业', '房地产', '中证旅游'];
+/** 腾讯无数据、在线版改走东财 push2his 的中证指数；东财对部分出口 IP 偶发连接重置，只允许这些码出现「数据源繁忙」 */
+const EM_SOURCED_CODES = ['932000', '931865', '932088', 'H30590', '931152', '930641', '931151', '931775', '930633'];
+const BUSY_TEXT = '数据源繁忙';
+const UNSUPPORTED_LABEL = '暂不支持';
+const BUSY_RETRY_DELAY_MS = 5_000;
 const FAILURE_TEXTS = ['分析失败', '数据不完整', '回测失败'];
 const CONSOLE_ALLOWLIST = [/fonts\.googleapis/, /cloudflareinsights/, /favicon|vite\.svg/];
 /**
@@ -509,6 +510,52 @@ async function step4Screener(page) {
 }
 
 /**
+ * 点一次「刷新」并等待该看板重新计算完成。
+ * @param {import('playwright').Page} page
+ */
+async function clickFishRefresh(page) {
+  const before = await page.evaluate(() => window.__griderE2E.fishBasinCount);
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await page.waitForFunction((n) => window.__griderE2E.fishBasinCount > n, before, { timeout: API_WAIT_MS });
+  await waitForEngineIdle(page);
+  await waitFishLoaded(page);
+}
+
+/**
+ * 鱼盆单个看板的三态断言：0 行泛化「失败」、0 行「暂不支持」（且无提示条）、「数据源繁忙」仅限东财来源码
+ * （有繁忙行时等 5 s 点一次「刷新」记录恢复数，不阻断）、YES/NO ≥ 阈值。
+ * @param {import('playwright').Page} page
+ * @param {string} label
+ * @param {number} minYesNo
+ */
+async function assertFishBoard(page, label, minYesNo) {
+  let rows = await readFishRows(page);
+  const fmt = (list) => list.map((r) => `${r.code}${r.name}${r.title ? `(${r.title})` : ''}`).join(',') || '无';
+
+  const failed = rows.filter((r) => r.status === '失败');
+  check('4b', `${label}：status==='失败' 行数为 0`, failed.length === 0, `rows=${rows.length} 失败=${fmt(failed)}`);
+
+  const unsupported = rows.filter((r) => r.status === UNSUPPORTED_LABEL);
+  const noticeCount = await page.getByTestId('fish-basin-unsupported').count();
+  check('4b', `${label}：status==='${UNSUPPORTED_LABEL}' 行数为 0 且无 fish-basin-unsupported 提示条`, unsupported.length === 0 && noticeCount === 0, `暂不支持=${fmt(unsupported)} noticeCount=${noticeCount}`);
+
+  const busy = rows.filter((r) => r.status === BUSY_TEXT);
+  const busyOutside = busy.filter((r) => !EM_SOURCED_CODES.includes(r.code));
+  check('4b', `${label}：status==='${BUSY_TEXT}' 的行 ⊆ EM_SOURCED_CODES`, busyOutside.length === 0, `繁忙=${fmt(busy)} 非东财来源=${fmt(busyOutside)}`);
+
+  if (busy.length) {
+    await sleep(BUSY_RETRY_DELAY_MS);
+    await clickFishRefresh(page);
+    rows = await readFishRows(page);
+    const stillBusy = rows.filter((r) => r.status === BUSY_TEXT);
+    check('4b', `${label}：繁忙行 5 s 后刷新一次的恢复数（仅记录，不阻断）`, true, `before=${busy.length} after=${stillBusy.length} recovered=${busy.length - stillBusy.length} 仍繁忙=${fmt(stillBusy)}`);
+  }
+
+  const yesNo = rows.filter((r) => r.status === 'YES' || r.status === 'NO');
+  check('4b', `${label}：YES/NO 行数 ≥ ${minYesNo}`, yesNo.length >= minYesNo, `rows=${rows.length} yesno=${yesNo.length} 非YES/NO=${fmt(rows.filter((r) => r.status !== 'YES' && r.status !== 'NO'))}`);
+}
+
+/**
  * @param {import('playwright').Page} page
  */
 async function step4bFishBasin(page) {
@@ -516,30 +563,12 @@ async function step4bFishBasin(page) {
   await waitForBodyText(page, /鱼盆模型/, UI_WAIT_MS);
   await page.waitForFunction((n) => document.querySelectorAll('tbody tr').length >= n, MIN_INDEX_ROWS, { timeout: API_WAIT_MS });
   await waitFishLoaded(page);
-  const indexRows = await readFishRows(page);
-  const indexYesNo = indexRows.filter((r) => r.status === 'YES' || r.status === 'NO');
-  check('4b', `大盘指数：YES/NO 行数 ≥ ${MIN_INDEX_ROWS}`, indexYesNo.length >= MIN_INDEX_ROWS, `rows=${indexRows.length} yesno=${indexYesNo.length} 失败=${indexRows.filter((r) => r.status === '失败').map((r) => `${r.code}${r.name}`).join(',') || '无'}`);
-
-  const failedRows = indexRows.filter((r) => r.status === '失败');
-  const zz2000 = indexRows.find((r) => r.code === UNSUPPORTED_INDEX_CODE);
-  check('4b', '仅 中证2000（932000）一行显示 失败，且 title 以「在线版暂不支持」开头',
-    failedRows.length === 1 && Boolean(zz2000) && zz2000.status === '失败' && typeof zz2000.title === 'string' && zz2000.title.startsWith(UNSUPPORTED_PREFIX),
-    `failed=${JSON.stringify(failedRows)} zz2000=${JSON.stringify(zz2000)}`);
-
-  const indexNotice = await page.getByTestId('fish-basin-unsupported').textContent({ timeout: UI_WAIT_MS }).catch(() => '');
-  check('4b', '大盘指数：不支持提示包含「中证2000」', indexNotice.includes(UNSUPPORTED_INDEX_NAME) && indexNotice.includes(UNSUPPORTED_PREFIX), indexNotice.trim());
+  await assertFishBoard(page, '大盘指数', MIN_INDEX_ROWS);
 
   await page.getByRole('button', { name: '板块轮动' }).click();
-  await page.waitForFunction((code) => !Array.from(document.querySelectorAll('tbody tr')).some((tr) => tr.textContent.includes(code)), UNSUPPORTED_INDEX_CODE, { timeout: API_WAIT_MS });
+  await page.waitForFunction((code) => !Array.from(document.querySelectorAll('tbody tr')).some((tr) => tr.textContent.includes(code)), EM_SOURCED_CODES[0], { timeout: API_WAIT_MS });
   await waitFishLoaded(page);
-  const sectorRows = await readFishRows(page);
-  const sectorYesNo = sectorRows.filter((r) => r.status === 'YES' || r.status === 'NO');
-  check('4b', `板块轮动：YES/NO 行数 ≥ ${MIN_SECTOR_ROWS}`, sectorYesNo.length >= MIN_SECTOR_ROWS, `rows=${sectorRows.length} yesno=${sectorYesNo.length} 失败=${sectorRows.filter((r) => r.status === '失败').map((r) => `${r.code}${r.name}`).join(',') || '无'}`);
-
-  const sectorNotice = await page.getByTestId('fish-basin-unsupported').textContent({ timeout: UI_WAIT_MS }).catch(() => '');
-  const missing = SECTOR_UNSUPPORTED_NAMES.filter((n) => !sectorNotice.includes(n));
-  const listed = (sectorNotice.match(/：(.+?)。/) || ['', ''])[1].split('、').filter(Boolean);
-  check('4b', '板块轮动：不支持提示列出 8 个名称', missing.length === 0 && listed.length === SECTOR_UNSUPPORTED_NAMES.length, `listed=${listed.join('、')} missing=${missing.join('、') || '无'}`);
+  await assertFishBoard(page, '板块轮动', MIN_SECTOR_ROWS);
 
   const before = await page.evaluate(() => window.__griderE2E.fishBasinCount);
   await page.getByRole('button', { name: '刷新', exact: true }).click();

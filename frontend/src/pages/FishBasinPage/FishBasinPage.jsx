@@ -10,6 +10,14 @@ const pct = (v) => (typeof v === "number" ? (v * 100).toFixed(2) + "%" : "—");
 const signedPct = (v) => (typeof v === "number" ? (v >= 0 ? "+" : "") + (v * 100).toFixed(2) + "%" : "—");
 const intFmt = (v) => (typeof v === "number" ? v.toLocaleString("en-US") : "—");
 
+// 状态列三态：后端 error 前缀「在线版暂不支持」→ 暂不支持；「数据源繁忙」→ 数据源繁忙；其它 → 失败（完整原因在 title）
+const errorLabel = (e) => {
+  if (!e) return "失败";
+  if (e.startsWith("在线版暂不支持")) return "暂不支持";
+  if (e.startsWith("数据源繁忙")) return "数据源繁忙";
+  return "失败";
+};
+
 // 偏离率背景色：正=红渐变(越强越红)，负=绿渐变(越弱越绿)
 const devBg = (v) => {
   if (typeof v !== "number") return "";
@@ -198,7 +206,7 @@ export default function FishBasinPage() {
           )}
           {data?.unsupported?.length > 0 && (
             <div data-testid="fish-basin-unsupported" className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-              在线版暂不支持以下标的（数据源为中证官网，浏览器无法直接访问）：{data.unsupported.map((u) => u.name || u.code).join("、")}。如需完整结果请使用本地版。
+              在线版暂不支持以下标的：{data.unsupported.map((u) => u.name || u.code).join("、")}。
             </div>
           )}
         </div>
@@ -255,7 +263,7 @@ export default function FishBasinPage() {
                         {r.status === "NO" && (
                           <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold">NO</span>
                         )}
-                        {!r.status && <span className="text-gray-400 text-xs" title={r.error || undefined}>失败</span>}
+                        {!r.status && <span className="text-gray-400 text-xs" title={r.error || undefined}>{errorLabel(r.error)}</span>}
                       </td>
                       <td className="py-2 px-2 text-gray-500 whitespace-nowrap">{r.status_since || "—"}</td>
                       <td className={`py-2 px-2 text-left ${

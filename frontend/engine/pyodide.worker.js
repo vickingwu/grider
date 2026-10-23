@@ -10,6 +10,8 @@
  *   → init-error {stage, message, hint}
  *   ← request {id, method, path, query, body}   → response {id, status, contentType, body} | error {id, message}
  *   ← probe-requests                            → probe-result {ok, detail}
+ *   Python 取数桥（registerJsModule 'grider_bridge'）：httpGetBytes(url, timeoutMs, ttl) / loadScriptVars(url, namesJson, ttl)
+ *   / evictCache(url)（空页重试前驱逐 Map + IndexedDB 中该 URL 的缓存）
  *
  * 整个文件包在严格模式 IIFE 内：importScripts 引入的供应商 `var` 全局不会与本地绑定冲突；绝不 delete 全局。
  */
@@ -221,6 +223,30 @@
       const bytes = new Uint8Array(xhr.response);
       if (ttl > 0) cachePut(url, bytes, ttl);
       return bytes;
+    },
+
+    /**
+     * 驱逐某个 URL 的缓存条目（Map 立即删除，IndexedDB 异步删除）。Python 侧在腾讯/东财空页重试前调用，
+     * 否则限流期被按 TTL 缓存的 200 空页会让「刷新」在最长 1 小时内始终读到空数据。
+     * @param {string} url
+     * @returns {boolean}
+     */
+    evictCache(url) {
+      const hit = memCache.get(url);
+      if (hit) {
+        memCache.delete(url);
+        memCacheBytes -= hit.size;
+      }
+      if (idb) {
+        try {
+          const tx = idb.transaction(CACHE_STORE, 'readwrite');
+          tx.objectStore(CACHE_STORE).delete(url);
+          tx.onerror = () => warnIdbOnce(tx.error && tx.error.message);
+        } catch (e) {
+          warnIdbOnce(e && e.message);
+        }
+      }
+      return true;
     },
 
     /**

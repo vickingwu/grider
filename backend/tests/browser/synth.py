@@ -4,6 +4,7 @@
 - tencent_page_json(symbol, fq, rows, dividend_at=None): 单页 fqkline/get 正文
 - tencent_pages(symbol, fq, total_rows, ...): 多页 {url: body}，URL 与 load_history_pages 的翻页规则一致
 - quote_body(symbol, name, price, pct): qt.gtimg.cn/q= 正文（≥ 33 字段）
+- em_kline_json(code, rows): 东财 push2his kline/get 正文（鱼盆中证指数 fallback）
 """
 import json
 import random
@@ -74,6 +75,17 @@ def tencent_pages(symbol: str, fq: str = "", total_rows: int = 1500, end: Option
         earliest = date.fromisoformat(page[0][0])
         end_param = (earliest - timedelta(days=1)).isoformat()
     return pages, all_rows
+
+
+def em_kline_json(code: str, rows: int = 400, end: Optional[date] = None, start_price: float = 1000.0,
+                  seed: int = 7) -> str:
+    """东财 push2his kline/get 正文：klines 每行 11 个字段（date,open,close,high,low,volume,amount,...）。"""
+    lines: List[str] = []
+    for d, open_, close, high, low, volume in synth_rows(code, business_days_ending(rows, end), start_price, seed):
+        amount = float(volume) * float(close) * 100
+        lines.append(f"{d},{open_},{close},{high},{low},{volume},{amount:.2f},1.00,0.10,1.0,0.5")
+    return json.dumps({"rc": 0, "rt": 17, "svr": 1, "lt": 1, "full": 0, "dlmkts": "",
+                       "data": {"code": code, "market": 2, "name": f"idx{code}", "klines": lines}})
 
 
 def quote_body(symbol: str, name: str, price: float = 4.229, pct: float = 0.02,
